@@ -5,8 +5,9 @@ BUILD_DIR = ./build
 APP_BUNDLE = $(BUILD_DIR)/$(APP_NAME)
 APPLICATIONS_DIR = /Applications
 RELEASE_MAKE := $(MAKE)
+export VERSION TAG
 
-.PHONY: all build app install install-app uninstall clean run stop test dmg set-version release help
+.PHONY: all build app install install-app uninstall clean run stop test dmg changelog set-version release help
 
 all: build
 
@@ -18,6 +19,7 @@ help:
 	@echo "  make install                 - Copy CLI binary to $(INSTALL_DIR)/$(BIN_NAME)"
 	@echo "  make uninstall               - Remove binary & app, stop daemon"
 	@echo "  make dmg                     - Create AirSwitch.dmg for distribution"
+	@echo "  make changelog [TAG=vX.Y.Z]  - Generate build/RELEASE_NOTES.md and build/CHANGELOG.md"
 	@echo "  make set-version VERSION=x.y.z - Sync version across Info.plist & Swift source"
 	@echo "  make release [VERSION=x.y.z] - Bump version, tag, and push to trigger GitHub Release"
 	@echo "  make test                    - Run test suite"
@@ -56,10 +58,22 @@ dmg: app
 	@rm -rf $(BUILD_DIR)/dmg-staging
 	@echo "DMG created: $(BUILD_DIR)/AirSwitch.dmg"
 
+changelog:
+	@mkdir -p $(BUILD_DIR)
+	@bash scripts/generate-changelog.sh \
+		--tag "$${TAG:-}" \
+		--release-notes "$(BUILD_DIR)/RELEASE_NOTES.md" \
+		--changelog "$(BUILD_DIR)/CHANGELOG.md"
+	@echo "Changelog generated: $(BUILD_DIR)/RELEASE_NOTES.md and $(BUILD_DIR)/CHANGELOG.md"
+
 set-version:
-	@if [ -z "$(VERSION)" ]; then echo "Usage: make set-version VERSION=0.1.0"; exit 1; fi
 	@set -e; \
-	CLEAN_VER=$$(echo "$(VERSION)" | sed 's/^v//'); \
+	if [ -z "$${VERSION:-}" ]; then echo "Usage: make set-version VERSION=0.1.0"; exit 1; fi; \
+	CLEAN_VER="$${VERSION#v}"; \
+	if ! printf '%s' "$$CLEAN_VER" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$$'; then \
+		printf 'Error: invalid version "%s"\n' "$$VERSION" >&2; \
+		exit 1; \
+	fi; \
 	/usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $$CLEAN_VER" Resources/Info.plist; \
 	/usr/libexec/PlistBuddy -c "Set :CFBundleVersion $$CLEAN_VER" Resources/Info.plist; \
 	sed -i '' -E "s/fallbackVersion = \"[^\"]+\"/fallbackVersion = \"$$CLEAN_VER\"/" Sources/AirSwitchKit/Config/AppConstants.swift; \
@@ -73,16 +87,20 @@ release:
 	}; \
 	LATEST_TAG=$$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0"); \
 	CURRENT_VER=$${LATEST_TAG#v}; \
-	if [ -n "$(VERSION)" ]; then \
-		NEXT_VER=$$(echo "$(VERSION)" | sed 's/^v//'); \
+	if [ -n "$${VERSION:-}" ]; then \
+		NEXT_VER="$${VERSION#v}"; \
 	else \
 		NEXT_VER=$$(echo "$$CURRENT_VER" | awk -F. '{print $$1"."$$2"."$$3+1}'); \
+	fi; \
+	if ! printf '%s' "$$NEXT_VER" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$$'; then \
+		printf 'Error: invalid release version "%s"\n' "$$NEXT_VER" >&2; \
+		exit 1; \
 	fi; \
 	if git rev-parse -q --verify "refs/tags/v$$NEXT_VER" >/dev/null; then \
 		printf '%s\n' "Error: tag v$$NEXT_VER already exists." >&2; \
 		exit 1; \
 	fi; \
-	$(RELEASE_MAKE) set-version VERSION="$$NEXT_VER"; \
+	VERSION="$$NEXT_VER" $(RELEASE_MAKE) set-version; \
 	if ! git diff --quiet -- Resources/Info.plist Sources/AirSwitchKit/Config/AppConstants.swift; then \
 		git add Resources/Info.plist Sources/AirSwitchKit/Config/AppConstants.swift; \
 		git commit -m "chore(release): v$$NEXT_VER"; \

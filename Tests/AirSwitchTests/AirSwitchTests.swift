@@ -523,4 +523,106 @@ final class AirSwitchTests: XCTestCase {
         XCTAssertFalse(handledWhenInactive)
         XCTAssertEqual(Preferences.shared.hotKeyCombo, .defaultToggle)
     }
+
+    func testGenerateChangelogScriptProducesCategorizedReleaseNotesAndChangelog() throws {
+        let fm = FileManager.default
+        let tempRepo = fm.temporaryDirectory.appendingPathComponent("AirSwitchChangelogTest-\(UUID().uuidString)", isDirectory: true)
+        try fm.createDirectory(at: tempRepo, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: tempRepo) }
+
+        let repoRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let scriptPath = repoRoot.appendingPathComponent("scripts/generate-changelog.sh").path
+
+        @discardableResult
+        func run(_ args: [String], expectSuccess: Bool = true) throws -> Int32 {
+            let proc = Process()
+            proc.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+            proc.arguments = args
+            proc.currentDirectoryURL = tempRepo
+            var env = ProcessInfo.processInfo.environment
+            env["GIT_CONFIG_NOSYSTEM"] = "1"
+            env["GIT_CONFIG_GLOBAL"] = "/dev/null"
+            proc.environment = env
+            proc.standardOutput = Pipe()
+            proc.standardError = Pipe()
+            try proc.run()
+            proc.waitUntilExit()
+            if expectSuccess {
+                XCTAssertEqual(proc.terminationStatus, 0, "Command failed: \(args.joined(separator: " "))")
+            }
+            return proc.terminationStatus
+        }
+
+        try run(["git", "init", "-q"])
+        try run(["git", "config", "user.email", "test@example.com"])
+        try run(["git", "config", "user.name", "Test User"])
+        try run(["git", "config", "commit.gpgsign", "false"])
+        try run(["git", "config", "tag.gpgSign", "false"])
+        try run(["git", "config", "core.hooksPath", "/dev/null"])
+
+        try Data("v1\n".utf8).write(to: tempRepo.appendingPathComponent("file.txt"))
+        try run(["git", "add", "file.txt"])
+        try run(["git", "commit", "-q", "-m", "feat: initial release"])
+        try run(["git", "tag", "v0.1.0"])
+
+        try Data("v2\n".utf8).write(to: tempRepo.appendingPathComponent("file.txt"))
+        try run(["git", "add", "file.txt"])
+        try run(["git", "commit", "-q", "-m", "feat(onboarding): add first-launch window"])
+        try run(["git", "tag", "v0.2.0-beta.1"])
+
+        try Data("v3\n".utf8).write(to: tempRepo.appendingPathComponent("file.txt"))
+        try run(["git", "add", "file.txt"])
+        try run(["git", "commit", "-q", "-m", "fix(bluetooth): verify connection state"])
+        try run(["git", "commit", "--allow-empty", "-q", "-m", "chore(release): v0.2.0"])
+        try run(["git", "tag", "v0.2.0"])
+
+        let releaseNotesURL = tempRepo.appendingPathComponent("build/RELEASE_NOTES.md")
+        let changelogURL = tempRepo.appendingPathComponent("build/CHANGELOG.md")
+
+        try run([
+            "bash", scriptPath,
+            "--tag", "v0.2.0",
+            "--release-notes", releaseNotesURL.path,
+            "--changelog", changelogURL.path,
+            "--repo", "MatthieuD134/AirSwitch"
+        ])
+
+        let releaseNotes = try String(contentsOf: releaseNotesURL, encoding: .utf8)
+        let changelog = try String(contentsOf: changelogURL, encoding: .utf8)
+
+        // Stable release v0.2.0 compares against previous stable tag v0.1.0 (including v0.2.0-beta.1 commits)
+        XCTAssertTrue(releaseNotes.contains("## v0.2.0"))
+        XCTAssertTrue(releaseNotes.contains("### ✨ Features"))
+        XCTAssertTrue(releaseNotes.contains("- **onboarding**: add first-launch window"))
+        XCTAssertTrue(releaseNotes.contains("### 🐛 Bug Fixes"))
+        XCTAssertTrue(releaseNotes.contains("- **bluetooth**: verify connection state"))
+        XCTAssertFalse(releaseNotes.contains("chore(release): v0.2.0"))
+        XCTAssertTrue(releaseNotes.contains("https://github.com/MatthieuD134/AirSwitch/compare/v0.1.0...v0.2.0"))
+
+        // Cumulative CHANGELOG.md orders v0.2.0 before v0.2.0-beta.1 before v0.1.0
+        let v020Range = try XCTUnwrap(changelog.range(of: "## v0.2.0 "))
+        let v020BetaRange = try XCTUnwrap(changelog.range(of: "## v0.2.0-beta.1 "))
+        let v010Range = try XCTUnwrap(changelog.range(of: "## v0.1.0 "))
+        XCTAssertLessThan(v020Range.lowerBound, v020BetaRange.lowerBound)
+        XCTAssertLessThan(v020BetaRange.lowerBound, v010Range.lowerBound)
+
+        // Future tag at already-tagged HEAD uses v0.2.0 as baseline rather than repeating v0.2.0 changes
+        let futureNotesURL = tempRepo.appendingPathComponent("build/FUTURE_NOTES.md")
+        try run([
+            "bash", scriptPath,
+            "--tag", "v0.3.0",
+            "--release-notes", futureNotesURL.path,
+            "--repo", "MatthieuD134/AirSwitch"
+        ])
+        let futureNotes = try String(contentsOf: futureNotesURL, encoding: .utf8)
+        XCTAssertTrue(futureNotes.contains("https://github.com/MatthieuD134/AirSwitch/compare/v0.2.0...v0.3.0"))
+        XCTAssertTrue(futureNotes.contains("- Maintenance and version bump updates."))
+
+        // Rejects tag containing shell metacharacters
+        let badStatus = try run(["bash", scriptPath, "--tag", "v0.2.0;$(id)"], expectSuccess: false)
+        XCTAssertNotEqual(badStatus, 0)
+    }
 }
