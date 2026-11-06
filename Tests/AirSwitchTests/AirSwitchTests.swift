@@ -129,4 +129,55 @@ final class AirSwitchTests: XCTestCase {
         XCTAssertEqual(afterExpiry?.left, 90)
         XCTAssertEqual(loadCount, 2)
     }
+
+    @MainActor
+    func testHUDResolveDisplayContentPreservesCustomSubtitlesAndFailures() {
+        let battery = BatteryInfo(single: 80)
+
+        let selectedDisconnected = HUDWindowController.resolveDisplayContent(
+            title: "Sony XM5",
+            subtitle: "Selected as primary device",
+            connected: false,
+            battery: nil
+        )
+        XCTAssertEqual(selectedDisconnected.statusText, "Sony XM5 · Selected as primary device")
+        XCTAssertNil(selectedDisconnected.batteryText)
+        XCTAssertFalse(selectedDisconnected.isTransitioning)
+
+        let selectedConnected = HUDWindowController.resolveDisplayContent(
+            title: "AirPods Pro",
+            subtitle: "Selected as primary device",
+            connected: true,
+            battery: battery
+        )
+        XCTAssertEqual(selectedConnected.statusText, "AirPods Pro · Selected as primary device")
+        XCTAssertEqual(selectedConnected.batteryText, "􀛨 80%")
+
+        let failed = HUDWindowController.resolveDisplayContent(
+            title: "AirPods Pro",
+            subtitle: "Connection Failed",
+            connected: false,
+            battery: battery
+        )
+        XCTAssertEqual(failed.statusText, "Connection Failed")
+        XCTAssertNil(failed.batteryText)
+
+        let normalConnected = HUDWindowController.resolveDisplayContent(
+            title: "AirPods Pro",
+            subtitle: "Connected",
+            connected: true,
+            battery: battery
+        )
+        XCTAssertEqual(normalConnected.statusText, "AirPods Pro")
+        XCTAssertEqual(normalConnected.batteryText, "􀛨 80%")
+
+        let normalDisconnected = HUDWindowController.resolveDisplayContent(
+            title: "AirPods Pro",
+            subtitle: "Disconnected",
+            connected: false,
+            battery: nil
+        )
+        XCTAssertEqual(normalDisconnected.statusText, "Disconnected")
+        XCTAssertNil(normalDisconnected.batteryText)
+    }
 }

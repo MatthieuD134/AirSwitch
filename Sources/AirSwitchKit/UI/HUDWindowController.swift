@@ -59,8 +59,15 @@ public final class HUDWindowController {
         guard Preferences.shared.showHUD else { return }
         guard let window, let pill = pillView else { return }
 
-        let lowerSubtitle = subtitle.lowercased()
-        let isTransitioning = lowerSubtitle.contains("connecting") || lowerSubtitle.contains("disconnecting")
+        let resolved = Self.resolveDisplayContent(
+            title: title,
+            subtitle: subtitle,
+            connected: connected,
+            battery: battery
+        )
+        let isTransitioning = resolved.isTransitioning
+        let displayLabelText = resolved.statusText
+        let batteryText = resolved.batteryText
         let isAlreadyVisible = dismissTimer != nil
 
         dismissTimer?.invalidate()
@@ -68,20 +75,6 @@ public final class HUDWindowController {
 
         pill.configureIcon(forDeviceTitle: title)
         pill.setPulseAnimation(active: animationsEnabled && isTransitioning)
-
-        let displayLabelText: String
-        let batteryText: String?
-
-        if isTransitioning {
-            displayLabelText = subtitle
-            batteryText = nil
-        } else if !connected {
-            displayLabelText = "Disconnected"
-            batteryText = nil
-        } else {
-            displayLabelText = Self.cleanDeviceName(title)
-            batteryText = battery?.hudDisplayString
-        }
 
         let minWidth: CGFloat = isTransitioning ? 190 : (connected ? 200 : 175)
         let targetWidth = pill.calculateAndApplyWidth(
@@ -165,6 +158,40 @@ public final class HUDWindowController {
                 self?.dismiss()
             }
         }
+    }
+
+    public static func resolveDisplayContent(
+        title: String,
+        subtitle: String,
+        connected: Bool,
+        battery: BatteryInfo? = nil
+    ) -> (statusText: String, batteryText: String?, isTransitioning: Bool) {
+        let trimmedSubtitle = subtitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        let lowerSubtitle = trimmedSubtitle.lowercased()
+        let isTransitioning = lowerSubtitle.contains("connecting") || lowerSubtitle.contains("disconnecting")
+
+        if isTransitioning {
+            return (trimmedSubtitle, nil, true)
+        }
+
+        if lowerSubtitle.contains("failed") {
+            return (trimmedSubtitle, nil, false)
+        }
+
+        let isDefaultConnected = lowerSubtitle.isEmpty
+            || lowerSubtitle == "connected"
+            || lowerSubtitle == "auto-connected on wake"
+        if connected && isDefaultConnected {
+            return (cleanDeviceName(title), battery?.hudDisplayString, false)
+        }
+
+        let isDefaultDisconnected = lowerSubtitle.isEmpty || lowerSubtitle == "disconnected"
+        if !connected && isDefaultDisconnected {
+            return ("Disconnected", nil, false)
+        }
+
+        let combined = "\(cleanDeviceName(title)) · \(trimmedSubtitle)"
+        return (combined, connected ? battery?.hudDisplayString : nil, false)
     }
 
     public static func cleanDeviceName(_ raw: String) -> String {
