@@ -4,6 +4,7 @@ INSTALL_DIR = $(HOME)/.local/bin
 BUILD_DIR = ./build
 APP_BUNDLE = $(BUILD_DIR)/$(APP_NAME)
 APPLICATIONS_DIR = /Applications
+RELEASE_MAKE := $(MAKE)
 
 .PHONY: all build app install install-app uninstall clean run stop test dmg set-version release help
 
@@ -57,19 +58,35 @@ dmg: app
 
 set-version:
 	@if [ -z "$(VERSION)" ]; then echo "Usage: make set-version VERSION=0.1.0"; exit 1; fi
-	@CLEAN_VER=$$(echo "$(VERSION)" | sed 's/^v//'); \
+	@set -e; \
+	CLEAN_VER=$$(echo "$(VERSION)" | sed 's/^v//'); \
 	/usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $$CLEAN_VER" Resources/Info.plist; \
 	/usr/libexec/PlistBuddy -c "Set :CFBundleVersion $$CLEAN_VER" Resources/Info.plist; \
 	sed -i '' -E "s/fallbackVersion = \"[^\"]+\"/fallbackVersion = \"$$CLEAN_VER\"/" Sources/AirSwitchKit/Config/AppConstants.swift; \
 	echo "Version set to $$CLEAN_VER"
 
 release:
-	@LATEST_TAG=$$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0"); \
+	@set -e; \
+	git diff --quiet && git diff --cached --quiet || { \
+		printf '%s\n' "Error: release requires a clean working tree and index." >&2; \
+		exit 1; \
+	}; \
+	LATEST_TAG=$$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0"); \
 	CURRENT_VER=$${LATEST_TAG#v}; \
 	if [ -n "$(VERSION)" ]; then \
 		NEXT_VER=$$(echo "$(VERSION)" | sed 's/^v//'); \
 	else \
 		NEXT_VER=$$(echo "$$CURRENT_VER" | awk -F. '{print $$1"."$$2"."$$3+1}'); \
+	fi; \
+	if git rev-parse -q --verify "refs/tags/v$$NEXT_VER" >/dev/null; then \
+		printf '%s\n' "Error: tag v$$NEXT_VER already exists." >&2; \
+		exit 1; \
+	fi; \
+	$(RELEASE_MAKE) set-version VERSION="$$NEXT_VER"; \
+	if ! git diff --quiet -- Resources/Info.plist Sources/AirSwitchKit/Config/AppConstants.swift; then \
+		git add Resources/Info.plist Sources/AirSwitchKit/Config/AppConstants.swift; \
+		git commit -m "chore(release): v$$NEXT_VER"; \
+		git push origin HEAD; \
 	fi; \
 	git tag -a "v$$NEXT_VER" -m "Release v$$NEXT_VER"; \
 	git push origin "v$$NEXT_VER"; \
