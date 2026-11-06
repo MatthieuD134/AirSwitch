@@ -167,27 +167,24 @@ public final class HUDWindowController {
         battery: BatteryInfo? = nil
     ) -> (statusText: String, batteryText: String?, isTransitioning: Bool) {
         let trimmedSubtitle = subtitle.trimmingCharacters(in: .whitespacesAndNewlines)
-        let lowerSubtitle = trimmedSubtitle.lowercased()
-        let isTransitioning = lowerSubtitle.contains("connecting") || lowerSubtitle.contains("disconnecting")
+        let isTransitioning = L10n.isTransitioningSubtitle(trimmedSubtitle)
 
         if isTransitioning {
             return (trimmedSubtitle, nil, true)
         }
 
-        if lowerSubtitle.contains("failed") {
+        if L10n.isFailureSubtitle(trimmedSubtitle) {
             return (trimmedSubtitle, nil, false)
         }
 
-        let isDefaultConnected = lowerSubtitle.isEmpty
-            || lowerSubtitle == "connected"
-            || lowerSubtitle == "auto-connected on wake"
+        let isDefaultConnected = L10n.isDefaultConnectedSubtitle(trimmedSubtitle)
         if connected && isDefaultConnected {
             return (cleanDeviceName(title), battery?.hudDisplayString, false)
         }
 
-        let isDefaultDisconnected = lowerSubtitle.isEmpty || lowerSubtitle == "disconnected"
+        let isDefaultDisconnected = L10n.isDefaultDisconnectedSubtitle(trimmedSubtitle)
         if !connected && isDefaultDisconnected {
-            return ("Disconnected", nil, false)
+            return (L10n.disconnected, nil, false)
         }
 
         let combined = "\(cleanDeviceName(title)) · \(trimmedSubtitle)"
@@ -196,7 +193,7 @@ public final class HUDWindowController {
 
     public static func cleanDeviceName(_ raw: String) -> String {
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.isEmpty { return "Headphones" }
+        if trimmed.isEmpty { return L10n.headphones }
         if trimmed.count > 32 {
             return String(trimmed.prefix(30)) + "…"
         }

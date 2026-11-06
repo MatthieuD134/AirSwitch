@@ -99,7 +99,7 @@ public final class AppSelfUpdater {
         isInstalling = true
         HUDWindowController.shared.show(
             title: "AirSwitch \(release.tagName)",
-            subtitle: "Connecting...",
+            subtitle: L10n.connecting,
             connected: true,
             battery: nil
         )
@@ -202,7 +202,7 @@ public final class AppSelfUpdater {
         NSLog("[AirSwitch] Self-update failed: \(message)")
         HUDWindowController.shared.show(
             title: AppConstants.appName,
-            subtitle: "Update Failed",
+            subtitle: L10n.updateFailed,
             connected: false,
             battery: nil
         )

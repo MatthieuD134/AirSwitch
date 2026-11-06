@@ -198,10 +198,10 @@ public final class BluetoothConnectionMonitor: NSObject, @unchecked Sendable {
         StatusBarController.shared.updateUI()
 
         guard event == .disconnected else { return }
-        let displayName = Preferences.shared.targetDeviceName ?? device.name ?? "Headphones"
+        let displayName = Preferences.shared.targetDeviceName ?? device.name ?? L10n.headphones
         HUDWindowController.shared.show(
             title: displayName,
-            subtitle: "Disconnected",
+            subtitle: L10n.disconnected,
             connected: false,
             battery: nil
         )
@@ -232,7 +232,7 @@ public final class BluetoothConnectionMonitor: NSObject, @unchecked Sendable {
             LowBatteryMonitor.shared.reset(for: address)
             HUDWindowController.shared.show(
                 title: name,
-                subtitle: "Disconnected",
+                subtitle: L10n.disconnected,
                 connected: false,
                 battery: nil
             )
@@ -284,7 +284,7 @@ public final class BluetoothConnectionMonitor: NSObject, @unchecked Sendable {
             StatusBarController.shared.updateUI()
             HUDWindowController.shared.show(
                 title: target.name,
-                subtitle: "Connected",
+                subtitle: L10n.connected,
                 connected: true,
                 battery: battery
             )

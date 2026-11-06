@@ -17,9 +17,8 @@ public final class ShortcutRecorderWindowController: NSObject, NSWindowDelegate 
         HotKeyService.shared.suspend()
 
         if let existing = window {
-            badgeLabel?.stringValue = HotKeyService.shared.currentKeyCombo.displayString
-            statusLabel?.stringValue = "Press a new key combination (Esc to cancel)"
-            statusLabel?.textColor = .secondaryLabelColor
+            existing.title = L10n.globalShortcutTitle
+            existing.contentView = buildContentView()
             existing.center()
             existing.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
@@ -32,7 +31,7 @@ public final class ShortcutRecorderWindowController: NSObject, NSWindowDelegate 
             backing: .buffered,
             defer: false
         )
-        newWindow.title = "Global Shortcut"
+        newWindow.title = L10n.globalShortcutTitle
         newWindow.titleVisibility = .hidden
         newWindow.titlebarAppearsTransparent = true
         newWindow.isMovableByWindowBackground = true
@@ -57,6 +56,12 @@ public final class ShortcutRecorderWindowController: NSObject, NSWindowDelegate 
         NSApp.activate(ignoringOtherApps: true)
     }
 
+    public func refreshLocalization() {
+        guard let existing = window else { return }
+        existing.title = L10n.globalShortcutTitle
+        existing.contentView = buildContentView()
+    }
+
     internal func handleKeyInput(
         keyCode: UInt16,
         modifiers: NSEvent.ModifierFlags,
@@ -76,7 +81,7 @@ public final class ShortcutRecorderWindowController: NSObject, NSWindowDelegate 
             if keyCode == UInt16(kVK_Tab) || keyCode == UInt16(kVK_Space) || keyCode == UInt16(kVK_Return) {
                 return false
             }
-            statusLabel?.stringValue = "Include Control (⌃), Option (⌥), or Command (⌘)"
+            statusLabel?.stringValue = L10n.shortcutModifierWarning
             statusLabel?.textColor = .systemOrange
             return true
         }
@@ -91,14 +96,14 @@ public final class ShortcutRecorderWindowController: NSObject, NSWindowDelegate 
 
     private func applyCombo(_ combo: KeyCombo) {
         guard HotKeyService.shared.applyAndResume(combo) else {
-            statusLabel?.stringValue = "\(combo.displayString) is reserved by macOS — try another"
+            statusLabel?.stringValue = L10n.shortcutReserved(combo.displayString)
             statusLabel?.textColor = .systemRed
             return
         }
 
         badgeLabel?.stringValue = combo.displayString
         HUDWindowController.shared.show(
-            title: "Shortcut Updated",
+            title: L10n.shortcutUpdated,
             subtitle: combo.displayString,
             connected: true,
             battery: nil
@@ -136,7 +141,7 @@ public final class ShortcutRecorderWindowController: NSObject, NSWindowDelegate 
         effectView.state = .active
         effectView.appearance = NSAppearance(named: .darkAqua)
 
-        let title = NSTextField(labelWithString: "Global Toggle Shortcut")
+        let title = NSTextField(labelWithString: L10n.globalToggleShortcutHeader)
         title.font = .systemFont(ofSize: 16, weight: .semibold)
         title.textColor = .labelColor
 
@@ -156,16 +161,20 @@ public final class ShortcutRecorderWindowController: NSObject, NSWindowDelegate 
         badgeContainer.addSubview(badge)
         self.badgeLabel = badge
 
-        let status = NSTextField(labelWithString: "Press a new key combination (Esc to cancel)")
+        let status = NSTextField(labelWithString: L10n.shortcutPrompt)
         status.font = .systemFont(ofSize: 12, weight: .regular)
         status.textColor = .secondaryLabelColor
         status.alignment = .center
         self.statusLabel = status
 
-        let resetButton = NSButton(title: "Reset to Default (⌃⌥A)", target: self, action: #selector(resetToDefault))
+        let resetButton = NSButton(
+            title: L10n.resetToDefault(KeyCombo.defaultToggle.displayString),
+            target: self,
+            action: #selector(resetToDefault)
+        )
         resetButton.bezelStyle = .rounded
 
-        let cancelButton = NSButton(title: "Cancel", target: self, action: #selector(cancelRecording))
+        let cancelButton = NSButton(title: L10n.cancel, target: self, action: #selector(cancelRecording))
         cancelButton.bezelStyle = .rounded
 
         let buttonRow = NSStackView(views: [resetButton, cancelButton])
