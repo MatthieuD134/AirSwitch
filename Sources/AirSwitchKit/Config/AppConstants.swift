@@ -2,7 +2,7 @@ import Foundation
 
 public enum AppConstants {
     public static let appName = "AirSwitch"
-    public static let fallbackVersion = "0.1.1"
+    public static let fallbackVersion = "0.2.0"
     public static var version: String {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? fallbackVersion
     }
