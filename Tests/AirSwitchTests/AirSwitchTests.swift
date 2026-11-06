@@ -334,4 +334,100 @@ final class AirSwitchTests: XCTestCase {
         // Unsigned bundle fails when signature verification is enabled
         XCTAssertThrowsError(try AppSelfUpdater.validateExtractedBundle(at: appURL, verifySignature: true))
     }
+
+    func testLowBatteryMonitorThresholdsHysteresisAndReset() {
+        let monitor = LowBatteryMonitor(thresholds: [20, 10])
+        let address = "AA:BB:CC:DD:EE:FF"
+
+        // Above 20% produces no alert
+        XCTAssertNil(monitor.evaluate(deviceAddress: address, isConnected: true, battery: BatteryInfo(single: 55)))
+
+        // Dropping to 18% fires the 20% threshold once
+        let first20 = monitor.evaluate(deviceAddress: address, isConnected: true, battery: BatteryInfo(single: 18))
+        XCTAssertEqual(first20, LowBatteryAlert(threshold: 20, currentPercent: 18))
+        XCTAssertEqual(first20?.hudSubtitle, "Low Battery (18%)")
+
+        // Subsequent polls <= 20% and > 10% do not repeat the 20% alert, even with 1-2% upward jitter
+        XCTAssertNil(monitor.evaluate(deviceAddress: address, isConnected: true, battery: BatteryInfo(single: 16)))
+        XCTAssertNil(monitor.evaluate(deviceAddress: address, isConnected: true, battery: BatteryInfo(single: 21)))
+        XCTAssertNil(monitor.evaluate(deviceAddress: address, isConnected: true, battery: BatteryInfo(single: 19)))
+
+        // Dropping to 9% fires the 10% threshold once
+        let first10 = monitor.evaluate(deviceAddress: address, isConnected: true, battery: BatteryInfo(single: 9))
+        XCTAssertEqual(first10, LowBatteryAlert(threshold: 10, currentPercent: 9))
+        XCTAssertNil(monitor.evaluate(deviceAddress: address, isConnected: true, battery: BatteryInfo(single: 8)))
+        XCTAssertNil(monitor.evaluate(deviceAddress: address, isConnected: true, battery: BatteryInfo(single: 12)))
+
+        // Disconnecting resets session state so reconnecting at 15% alerts again
+        XCTAssertNil(monitor.evaluate(deviceAddress: address, isConnected: false, battery: nil))
+        let afterReconnect = monitor.evaluate(deviceAddress: address, isConnected: true, battery: BatteryInfo(single: 15))
+        XCTAssertEqual(afterReconnect, LowBatteryAlert(threshold: 20, currentPercent: 15))
+    }
+
+    func testLowBatteryMonitorConnectingDirectlyAtCriticalLevelSuppressesHigherThreshold() {
+        let monitor = LowBatteryMonitor(thresholds: [20, 10])
+        let address = "11-22-33-44-55-66"
+
+        let critical = monitor.evaluate(deviceAddress: address, isConnected: true, battery: BatteryInfo(left: 8, right: 15))
+        XCTAssertEqual(critical, LowBatteryAlert(threshold: 10, currentPercent: 8))
+
+        // If reading fluctuates to 14% while still below 20%, the 20% alert must not fire retroactively
+        XCTAssertNil(monitor.evaluate(deviceAddress: address, isConnected: true, battery: BatteryInfo(left: 14, right: 15)))
+    }
+
+    func testBluetoothConnectionMonitorTransitionsAndAppSuppression() {
+        let monitor = BluetoothConnectionMonitor()
+        let target = "aa-bb-cc-dd-ee-ff"
+        let other = "11-22-33-44-55-66"
+        let t0 = Date(timeIntervalSince1970: 5_000)
+
+        // First observation seeds state without emitting an event
+        XCTAssertNil(monitor.recordObservedState(address: target, isConnected: false, targetAddress: target, now: t0))
+
+        // Non-target device transitions are ignored
+        XCTAssertNil(monitor.recordObservedState(address: other, isConnected: true, targetAddress: target, now: t0))
+
+        // External connect emits .connected once
+        XCTAssertEqual(
+            monitor.recordObservedState(address: target, isConnected: true, targetAddress: target, now: t0.addingTimeInterval(1)),
+            .connected
+        )
+        XCTAssertNil(
+            monitor.recordObservedState(address: target, isConnected: true, targetAddress: target, now: t0.addingTimeInterval(2))
+        )
+
+        // External disconnect emits .disconnected once
+        XCTAssertEqual(
+            monitor.recordObservedState(address: target, isConnected: false, targetAddress: target, now: t0.addingTimeInterval(3)),
+            .disconnected
+        )
+
+        // App-initiated transition suppresses external event both while active and during post-transition settle window
+        let tApp = t0.addingTimeInterval(10)
+        monitor.beginAppInitiatedTransition(for: target, now: tApp)
+        XCTAssertNil(
+            monitor.recordObservedState(address: target, isConnected: true, targetAddress: target, now: tApp.addingTimeInterval(0.5))
+        )
+        monitor.endAppInitiatedTransition(for: target, isConnected: true, now: tApp.addingTimeInterval(1.0))
+
+        // Observation after suppression window sees state is already true -> no duplicate event
+        XCTAssertNil(
+            monitor.recordObservedState(address: target, isConnected: true, targetAddress: target, now: tApp.addingTimeInterval(5.0))
+        )
+
+        // Resetting state while an app transition is active preserves suppression for the in-flight operation
+        let tReset = t0.addingTimeInterval(20)
+        monitor.beginAppInitiatedTransition(for: target, now: tReset)
+        monitor.resetState()
+        monitor.seedState(for: target, isConnected: false)
+        XCTAssertNil(
+            monitor.recordObservedState(address: target, isConnected: true, targetAddress: target, now: tReset.addingTimeInterval(0.5))
+        )
+        monitor.endAppInitiatedTransition(for: target, isConnected: true, now: tReset.addingTimeInterval(1.0))
+
+        // Invalidating pending connection HUD advances generation so delayed callback will not overwrite low-battery HUD
+        let genBefore = monitor.currentGeneration(for: target)
+        monitor.invalidatePendingConnectionHUD(for: target)
+        XCTAssertNotEqual(monitor.currentGeneration(for: target), genBefore)
+    }
 }

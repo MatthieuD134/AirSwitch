@@ -70,5 +70,6 @@ public final class Preferences {
         targetDeviceAddress = address
         targetDeviceName = name
         hasCompletedOnboarding = true
+        BluetoothConnectionMonitor.shared.resetState()
     }
 }

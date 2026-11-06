@@ -92,6 +92,7 @@ public final class OnboardingWindowController: NSObject, NSWindowDelegate {
                 ? BluetoothManager.shared.readBattery(for: selected.id, device: liveDevice)
                 : nil
 
+            BluetoothConnectionMonitor.shared.seedState(for: selected.id, isConnected: isConnected)
             HUDWindowController.shared.show(
                 title: selected.name,
                 subtitle: "Selected as primary device",
