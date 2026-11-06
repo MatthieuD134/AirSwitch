@@ -54,23 +54,23 @@ final class OnboardingDeviceRowView: NSView {
 
     private func setupView() {
         wantsLayer = true
-        layer?.cornerRadius = 11
+        layer?.cornerRadius = 10
         layer?.borderWidth = 1.25
         translatesAutoresizingMaskIntoConstraints = false
-        heightAnchor.constraint(equalToConstant: 58).isActive = true
+        heightAnchor.constraint(equalToConstant: 48).isActive = true
 
         iconBadgeView.wantsLayer = true
-        iconBadgeView.layer?.cornerRadius = 9
+        iconBadgeView.layer?.cornerRadius = 8
         iconBadgeView.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
-            iconBadgeView.widthAnchor.constraint(equalToConstant: 36),
-            iconBadgeView.heightAnchor.constraint(equalToConstant: 36)
+            iconBadgeView.widthAnchor.constraint(equalToConstant: 32),
+            iconBadgeView.heightAnchor.constraint(equalToConstant: 32)
         ])
 
         let symbolName = Self.symbolName(for: device.name)
         iconView.image = NSImage(systemSymbolName: symbolName, accessibilityDescription: device.name)
             ?? NSImage(systemSymbolName: "headphones", accessibilityDescription: device.name)
-        iconView.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 16, weight: .semibold)
+        iconView.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 14.5, weight: .semibold)
         iconView.translatesAutoresizingMaskIntoConstraints = false
         iconBadgeView.addSubview(iconView)
         NSLayoutConstraint.activate([
@@ -79,34 +79,34 @@ final class OnboardingDeviceRowView: NSView {
         ])
 
         nameLabel.stringValue = device.name
-        nameLabel.font = NSFont.systemFont(ofSize: 13.5, weight: .semibold)
+        nameLabel.font = NSFont.systemFont(ofSize: 13, weight: .semibold)
         nameLabel.textColor = Palette.primaryText
         nameLabel.lineBreakMode = .byTruncatingTail
 
         statusLabel.stringValue = Self.statusText(for: device)
-        statusLabel.font = NSFont.monospacedDigitSystemFont(ofSize: 11.5, weight: .medium)
+        statusLabel.font = NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .medium)
         statusLabel.textColor = device.isConnected ? Palette.connectedGreen : Palette.mutedText
 
         let textStack = NSStackView(views: [nameLabel, statusLabel])
         textStack.orientation = .vertical
         textStack.alignment = .leading
-        textStack.spacing = 2
+        textStack.spacing = 1
 
         let spacer = NSView()
         spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
 
-        radioIconView.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 17, weight: .semibold)
+        radioIconView.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 16, weight: .semibold)
         radioIconView.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
-            radioIconView.widthAnchor.constraint(equalToConstant: 20),
-            radioIconView.heightAnchor.constraint(equalToConstant: 20)
+            radioIconView.widthAnchor.constraint(equalToConstant: 18),
+            radioIconView.heightAnchor.constraint(equalToConstant: 18)
         ])
 
         let rowStack = NSStackView(views: [iconBadgeView, textStack, spacer, radioIconView])
         rowStack.orientation = .horizontal
         rowStack.alignment = .centerY
-        rowStack.spacing = 12
-        rowStack.edgeInsets = NSEdgeInsets(top: 10, left: 12, bottom: 10, right: 14)
+        rowStack.spacing = 10
+        rowStack.edgeInsets = NSEdgeInsets(top: 7, left: 11, bottom: 7, right: 12)
         rowStack.translatesAutoresizingMaskIntoConstraints = false
 
         addSubview(rowStack)

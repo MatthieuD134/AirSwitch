@@ -211,6 +211,10 @@ final class AirSwitchTests: XCTestCase {
             OnboardingState.recommendedDeviceID(from: [xm5, speaker], currentTargetAddress: nil),
             "11-22-33-44-55-66"
         )
+
+        // Orders recommended device first at index 0 so it is always visible at the top without scrolling
+        let ordered = OnboardingState.orderedDevices([speaker, airpods, xm5], recommendedID: airpods.id)
+        XCTAssertEqual(ordered.map(\.id), [airpods.id, speaker.id, xm5.id])
     }
 
     func testSemanticVersionParsingAndComparison() {

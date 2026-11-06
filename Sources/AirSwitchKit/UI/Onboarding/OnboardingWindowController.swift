@@ -6,6 +6,7 @@ public final class OnboardingWindowController: NSObject, NSWindowDelegate {
 
     private var window: NSWindow?
     private var onboardingView: OnboardingView?
+    private var didApplyConfiguration = false
 
     private override init() {
         super.init()
@@ -25,6 +26,7 @@ public final class OnboardingWindowController: NSObject, NSWindowDelegate {
     public func show() {
         let prefs = Preferences.shared
         let devices = BluetoothManager.shared.getPairedAudioDevices()
+        didApplyConfiguration = false
 
         if let existingWindow = window {
             onboardingView?.updateDevices(devices, preferredTargetAddress: prefs.targetDeviceAddress)
@@ -49,7 +51,7 @@ public final class OnboardingWindowController: NSObject, NSWindowDelegate {
         self.onboardingView = contentView
 
         let newWindow = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 410, height: 390),
+            contentRect: NSRect(x: 0, y: 0, width: 410, height: 440),
             styleMask: [.titled, .closable, .fullSizeContentView],
             backing: .buffered,
             defer: false
@@ -76,6 +78,14 @@ public final class OnboardingWindowController: NSObject, NSWindowDelegate {
     }
 
     private func applyConfigurationAndClose(_ config: OnboardingView.Configuration) {
+        persistConfiguration(config)
+        window?.close()
+    }
+
+    private func persistConfiguration(_ config: OnboardingView.Configuration) {
+        guard !didApplyConfiguration else { return }
+        didApplyConfiguration = true
+
         let prefs = Preferences.shared
         prefs.hasCompletedOnboarding = true
 
@@ -97,12 +107,14 @@ public final class OnboardingWindowController: NSObject, NSWindowDelegate {
                 battery: battery
             )
         }
-
-        window?.close()
     }
 
     public func windowWillClose(_ notification: Notification) {
-        Preferences.shared.hasCompletedOnboarding = true
+        if !didApplyConfiguration, let fallbackConfig = onboardingView?.currentConfiguration {
+            persistConfiguration(fallbackConfig)
+        } else {
+            Preferences.shared.hasCompletedOnboarding = true
+        }
         onboardingView = nil
         window = nil
         NSApp.setActivationPolicy(.accessory)

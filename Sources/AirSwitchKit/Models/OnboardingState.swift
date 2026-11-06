@@ -37,4 +37,20 @@ public enum OnboardingState {
 
         return devices.first?.id
     }
+
+    /// Orders devices so the recommended/selected device always appears first at the top of the list.
+    public static func orderedDevices(
+        _ devices: [AudioDevice],
+        recommendedID: String?
+    ) -> [AudioDevice] {
+        guard let recommendedID,
+              let index = devices.firstIndex(where: { $0.id == recommendedID }),
+              index > 0 else {
+            return devices
+        }
+        var reordered = devices
+        let selected = reordered.remove(at: index)
+        reordered.insert(selected, at: 0)
+        return reordered
+    }
 }

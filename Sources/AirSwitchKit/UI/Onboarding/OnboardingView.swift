@@ -1,6 +1,11 @@
 import AppKit
 
 @MainActor
+private final class FlippedStackContainerView: NSView {
+    override var isFlipped: Bool { true }
+}
+
+@MainActor
 final class OnboardingView: NSView {
     struct Configuration {
         var selectedDevice: AudioDevice?
@@ -22,11 +27,18 @@ final class OnboardingView: NSView {
     private var selectedDeviceID: String?
     private var rowViews: [OnboardingDeviceRowView] = []
 
+    private let scrollView = NSScrollView()
+    private let documentContainer = FlippedStackContainerView()
     private let deviceListStack = NSStackView()
     private let confirmButton = NSButton(title: "Continue", target: nil, action: nil)
 
     private let onRefreshRequested: () -> [AudioDevice]
     private let onComplete: (Configuration) -> Void
+
+    var currentConfiguration: Configuration {
+        let chosen = devices.first { $0.id == selectedDeviceID }
+        return Configuration(selectedDevice: chosen)
+    }
 
     init(
         initialDevices: [AudioDevice],
@@ -36,7 +48,7 @@ final class OnboardingView: NSView {
     ) {
         self.onRefreshRequested = onRefreshRequested
         self.onComplete = onComplete
-        super.init(frame: NSRect(x: 0, y: 0, width: 410, height: 390))
+        super.init(frame: NSRect(x: 0, y: 0, width: 410, height: 440))
 
         setupAppearance()
         setupLayout()
@@ -72,8 +84,8 @@ final class OnboardingView: NSView {
         let rootStack = NSStackView()
         rootStack.orientation = .vertical
         rootStack.alignment = .centerX
-        rootStack.spacing = 18
-        rootStack.edgeInsets = NSEdgeInsets(top: 30, left: 26, bottom: 22, right: 26)
+        rootStack.spacing = 16
+        rootStack.edgeInsets = NSEdgeInsets(top: 26, left: 26, bottom: 20, right: 26)
         rootStack.translatesAutoresizingMaskIntoConstraints = false
 
         rootStack.addArrangedSubview(buildHeroHeader())
@@ -99,18 +111,18 @@ final class OnboardingView: NSView {
         let badgeContainer = NSView()
         badgeContainer.wantsLayer = true
         badgeContainer.layer?.backgroundColor = Palette.heroBadgeBg.cgColor
-        badgeContainer.layer?.cornerRadius = 14
+        badgeContainer.layer?.cornerRadius = 13
         badgeContainer.layer?.borderWidth = 1
         badgeContainer.layer?.borderColor = Palette.heroBadgeBorder.cgColor
         badgeContainer.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
-            badgeContainer.widthAnchor.constraint(equalToConstant: 52),
-            badgeContainer.heightAnchor.constraint(equalToConstant: 52)
+            badgeContainer.widthAnchor.constraint(equalToConstant: 46),
+            badgeContainer.heightAnchor.constraint(equalToConstant: 46)
         ])
 
         let iconView = NSImageView()
         iconView.image = NSImage(systemSymbolName: "airpodspro", accessibilityDescription: AppConstants.appName)
-        iconView.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 23, weight: .semibold)
+        iconView.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 21, weight: .semibold)
         iconView.contentTintColor = Palette.accentBlue
         iconView.translatesAutoresizingMaskIntoConstraints = false
         badgeContainer.addSubview(iconView)
@@ -120,45 +132,53 @@ final class OnboardingView: NSView {
         ])
 
         let titleLabel = NSTextField(labelWithString: "Welcome to AirSwitch")
-        titleLabel.font = NSFont.systemFont(ofSize: 19, weight: .bold)
+        titleLabel.font = NSFont.systemFont(ofSize: 18.5, weight: .bold)
         titleLabel.textColor = Palette.primaryText
         titleLabel.alignment = .center
 
         let subtitleLabel = NSTextField(labelWithString: "Choose your primary headphones")
-        subtitleLabel.font = NSFont.systemFont(ofSize: 13, weight: .regular)
+        subtitleLabel.font = NSFont.systemFont(ofSize: 12.5, weight: .regular)
         subtitleLabel.textColor = Palette.secondaryText
         subtitleLabel.alignment = .center
 
         let textStack = NSStackView(views: [titleLabel, subtitleLabel])
         textStack.orientation = .vertical
         textStack.alignment = .centerX
-        textStack.spacing = 4
+        textStack.spacing = 3
 
         let headerStack = NSStackView(views: [badgeContainer, textStack])
         headerStack.orientation = .vertical
         headerStack.alignment = .centerX
-        headerStack.spacing = 12
+        headerStack.spacing = 10
         return headerStack
     }
 
     private func buildDeviceScrollView() -> NSView {
         deviceListStack.orientation = .vertical
         deviceListStack.alignment = .leading
-        deviceListStack.spacing = 8
+        deviceListStack.spacing = 6
         deviceListStack.translatesAutoresizingMaskIntoConstraints = false
 
-        let scrollView = NSScrollView()
+        documentContainer.translatesAutoresizingMaskIntoConstraints = false
+        documentContainer.addSubview(deviceListStack)
+
         scrollView.drawsBackground = false
         scrollView.hasVerticalScroller = true
         scrollView.autohidesScrollers = true
         scrollView.borderType = .noBorder
         scrollView.translatesAutoresizingMaskIntoConstraints = false
-        scrollView.documentView = deviceListStack
+        scrollView.documentView = documentContainer
 
         NSLayoutConstraint.activate([
             scrollView.widthAnchor.constraint(equalToConstant: 358),
-            scrollView.heightAnchor.constraint(equalToConstant: 140),
-            deviceListStack.widthAnchor.constraint(equalTo: scrollView.contentView.widthAnchor)
+            scrollView.heightAnchor.constraint(equalToConstant: 210),
+            documentContainer.topAnchor.constraint(equalTo: scrollView.contentView.topAnchor),
+            documentContainer.leadingAnchor.constraint(equalTo: scrollView.contentView.leadingAnchor),
+            documentContainer.trailingAnchor.constraint(equalTo: scrollView.contentView.trailingAnchor),
+            deviceListStack.topAnchor.constraint(equalTo: documentContainer.topAnchor),
+            deviceListStack.leadingAnchor.constraint(equalTo: documentContainer.leadingAnchor),
+            deviceListStack.trailingAnchor.constraint(equalTo: documentContainer.trailingAnchor),
+            deviceListStack.bottomAnchor.constraint(equalTo: documentContainer.bottomAnchor)
         ])
         return scrollView
     }
@@ -205,16 +225,18 @@ final class OnboardingView: NSView {
         let footerStack = NSStackView(views: [confirmButton, hintRow])
         footerStack.orientation = .vertical
         footerStack.alignment = .centerX
-        footerStack.spacing = 12
+        footerStack.spacing = 10
         return footerStack
     }
 
     func updateDevices(_ newDevices: [AudioDevice], preferredTargetAddress: String?) {
-        self.devices = newDevices
-        self.selectedDeviceID = OnboardingState.recommendedDeviceID(
+        let recommendedID = OnboardingState.recommendedDeviceID(
             from: newDevices,
             currentTargetAddress: preferredTargetAddress ?? selectedDeviceID
         )
+        let ordered = OnboardingState.orderedDevices(newDevices, recommendedID: recommendedID)
+        self.devices = ordered
+        self.selectedDeviceID = recommendedID
 
         deviceListStack.arrangedSubviews.forEach {
             deviceListStack.removeArrangedSubview($0)
@@ -222,7 +244,7 @@ final class OnboardingView: NSView {
         }
         rowViews.removeAll()
 
-        if newDevices.isEmpty {
+        if ordered.isEmpty {
             let emptyLabel = NSTextField(wrappingLabelWithString: "No paired Bluetooth headphones found.\nPair your headphones in Bluetooth Settings, then click ↻.")
             emptyLabel.font = NSFont.systemFont(ofSize: 12.5, weight: .regular)
             emptyLabel.textColor = Palette.secondaryText
@@ -230,7 +252,7 @@ final class OnboardingView: NSView {
             deviceListStack.addArrangedSubview(emptyLabel)
             confirmButton.title = "Continue Without Device"
         } else {
-            for device in newDevices {
+            for device in ordered {
                 let row = OnboardingDeviceRowView(
                     device: device,
                     isSelected: device.id == selectedDeviceID
@@ -243,6 +265,10 @@ final class OnboardingView: NSView {
             }
             confirmButton.title = "Continue"
         }
+
+        layoutSubtreeIfNeeded()
+        scrollView.contentView.scroll(to: .zero)
+        scrollView.reflectScrolledClipView(scrollView.contentView)
     }
 
     private func selectDevice(id: String) {
@@ -258,7 +284,6 @@ final class OnboardingView: NSView {
     }
 
     @objc private func handleConfirm() {
-        let chosen = devices.first { $0.id == selectedDeviceID }
-        onComplete(Configuration(selectedDevice: chosen))
+        onComplete(currentConfiguration)
     }
 }
