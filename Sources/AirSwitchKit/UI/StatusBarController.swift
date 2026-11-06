@@ -303,6 +303,14 @@ public final class StatusBarController: NSObject {
         menu.addItem(.separator())
 
         // 4. Updates & Quit
+        let versionItem = NSMenuItem(
+            title: "\(AppConstants.appName) v\(AppConstants.version)",
+            action: nil,
+            keyEquivalent: ""
+        )
+        versionItem.isEnabled = false
+        menu.addItem(versionItem)
+
         if let update = ReleaseCheckService.shared.availableUpdate {
             let installItem = NSMenuItem(
                 title: L10n.installUpdate(update.tagName),
@@ -399,6 +407,12 @@ public final class StatusBarController: NSObject {
     }
 
     @objc private func checkForUpdatesManually() {
+        HUDWindowController.shared.show(
+            title: "\(AppConstants.appName) v\(AppConstants.version)",
+            subtitle: L10n.checkForUpdates,
+            connected: true,
+            battery: nil
+        )
         ReleaseCheckService.shared.checkForUpdates { result in
             switch result {
             case .success(let update):
@@ -406,7 +420,7 @@ public final class StatusBarController: NSObject {
                     AppSelfUpdater.shared.install(update)
                 } else {
                     HUDWindowController.shared.show(
-                        title: "AirSwitch v\(AppConstants.version)",
+                        title: "\(AppConstants.appName) v\(AppConstants.version)",
                         subtitle: L10n.upToDate,
                         connected: true,
                         battery: nil
@@ -414,7 +428,7 @@ public final class StatusBarController: NSObject {
                 }
             case .failure:
                 HUDWindowController.shared.show(
-                    title: AppConstants.appName,
+                    title: "\(AppConstants.appName) v\(AppConstants.version)",
                     subtitle: L10n.updateCheckFailed,
                     connected: false,
                     battery: nil

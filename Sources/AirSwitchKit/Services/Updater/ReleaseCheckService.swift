@@ -212,7 +212,7 @@ public final class ReleaseCheckService {
             completion(.failure(ReleaseCheckError.invalidVersionString(AppConstants.version)))
             return
         }
-        guard let endpoint = URL(string: "https://api.github.com/repos/\(AppConstants.githubRepository)/releases/latest") else {
+        guard let redirectEndpoint = URL(string: "https://github.com/\(AppConstants.githubRepository)/releases/latest") else {
             return
         }
 
@@ -221,30 +221,67 @@ public final class ReleaseCheckService {
             return // Attach to in-flight check
         }
 
-        var request = URLRequest(url: endpoint)
+        var request = URLRequest(url: redirectEndpoint)
+        request.httpMethod = "HEAD"
+        request.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
+        request.setValue("\(AppConstants.appName)/\(AppConstants.version)", forHTTPHeaderField: "User-Agent")
+        request.timeoutInterval = 8
+
+        URLSession.shared.dataTask(with: request) { [weak self] _, response, error in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+
+                if let http = response as? HTTPURLResponse,
+                   (200...299).contains(http.statusCode),
+                   let finalURL = http.url,
+                   error == nil {
+                    do {
+                        let update = try Self.evaluateRedirectedReleaseURL(finalURL, currentVersion: currentVersion)
+                        Preferences.shared.lastUpdateCheckTimestamp = Date().timeIntervalSince1970
+                        self.availableUpdate = update
+                        self.completePendingChecks(with: .success(update))
+                        return
+                    } catch {
+                        // Fall through to GitHub REST API fallback
+                    }
+                }
+
+                let primaryError: Error = error ?? {
+                    if let http = response as? HTTPURLResponse {
+                        return ReleaseCheckError.invalidResponseStatus(http.statusCode)
+                    }
+                    return ReleaseCheckError.insecureOrInvalidURL
+                }()
+                self.checkViaAPIFallback(currentVersion: currentVersion, primaryError: primaryError)
+            }
+        }.resume()
+    }
+
+    private func checkViaAPIFallback(
+        currentVersion: SemanticVersion,
+        primaryError: Error
+    ) {
+        guard let apiEndpoint = URL(string: "https://api.github.com/repos/\(AppConstants.githubRepository)/releases/latest") else {
+            completePendingChecks(with: .failure(primaryError))
+            return
+        }
+
+        var request = URLRequest(url: apiEndpoint)
+        request.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
         request.setValue("\(AppConstants.appName)/\(AppConstants.version)", forHTTPHeaderField: "User-Agent")
-        request.timeoutInterval = 15
+        request.timeoutInterval = 8
 
         URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
             Task { @MainActor [weak self] in
                 guard let self else { return }
 
-                if let error {
-                    self.checkViaRedirectFallback(currentVersion: currentVersion, primaryError: error)
-                    return
-                }
-
-                if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
-                    self.checkViaRedirectFallback(
-                        currentVersion: currentVersion,
-                        primaryError: ReleaseCheckError.invalidResponseStatus(http.statusCode)
-                    )
-                    return
-                }
-
                 let result: Result<ReleaseInfo?, Error>
-                if let data {
+                if error != nil {
+                    result = .failure(primaryError)
+                } else if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+                    result = .failure(ReleaseCheckError.invalidResponseStatus(http.statusCode))
+                } else if let data {
                     do {
                         let update = try Self.evaluateReleasePayload(data, currentVersion: currentVersion)
                         Preferences.shared.lastUpdateCheckTimestamp = Date().timeIntervalSince1970
@@ -252,47 +289,6 @@ public final class ReleaseCheckService {
                         result = .success(update)
                     } catch {
                         result = .failure(error)
-                    }
-                } else {
-                    result = .success(nil)
-                }
-
-                self.completePendingChecks(with: result)
-            }
-        }.resume()
-    }
-
-    private func checkViaRedirectFallback(
-        currentVersion: SemanticVersion,
-        primaryError: Error
-    ) {
-        guard let fallbackURL = URL(string: "https://github.com/\(AppConstants.githubRepository)/releases/latest") else {
-            completePendingChecks(with: .failure(primaryError))
-            return
-        }
-
-        var request = URLRequest(url: fallbackURL)
-        request.httpMethod = "HEAD"
-        request.setValue("\(AppConstants.appName)/\(AppConstants.version)", forHTTPHeaderField: "User-Agent")
-        request.timeoutInterval = 15
-
-        URLSession.shared.dataTask(with: request) { [weak self] _, response, error in
-            Task { @MainActor [weak self] in
-                guard let self else { return }
-
-                let result: Result<ReleaseInfo?, Error>
-                if error != nil {
-                    result = .failure(primaryError)
-                } else if let http = response as? HTTPURLResponse,
-                          (200...299).contains(http.statusCode),
-                          let finalURL = http.url {
-                    do {
-                        let update = try Self.evaluateRedirectedReleaseURL(finalURL, currentVersion: currentVersion)
-                        Preferences.shared.lastUpdateCheckTimestamp = Date().timeIntervalSince1970
-                        self.availableUpdate = update
-                        result = .success(update)
-                    } catch {
-                        result = .failure(primaryError)
                     }
                 } else {
                     result = .failure(primaryError)
