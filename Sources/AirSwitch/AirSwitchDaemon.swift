@@ -4,8 +4,6 @@ import AirSwitchKit
 
 @MainActor
 enum AirSwitchDaemon {
-    private static var globalHotKey: HotKey?
-
     static func run() {
         let app = NSApplication.shared
         app.setActivationPolicy(.accessory) // No dock icon, menu bar only
@@ -14,7 +12,7 @@ enum AirSwitchDaemon {
         SleepWakeService.shared.start()
         BluetoothConnectionMonitor.shared.start()
 
-        globalHotKey = HotKey(keyCombo: .defaultToggle) {
+        let registered = HotKeyService.shared.start {
             Task { @MainActor in
                 StatusBarController.shared.toggleConnection()
             }
@@ -23,7 +21,11 @@ enum AirSwitchDaemon {
         OnboardingWindowController.shared.presentIfNeeded()
         ReleaseCheckService.shared.checkInBackgroundIfNeeded()
 
-        NSLog("[AirSwitch] Daemon started. Hotkey ⌃⌥A registered.")
+        if registered {
+            NSLog("[AirSwitch] Daemon started. Hotkey \(HotKeyService.shared.currentKeyCombo.displayString) registered.")
+        } else {
+            NSLog("[AirSwitch] Daemon started. Warning: failed to register global hotkey.")
+        }
         app.run()
     }
 }

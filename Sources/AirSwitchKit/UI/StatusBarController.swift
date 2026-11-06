@@ -185,12 +185,13 @@ public final class StatusBarController: NSObject {
             headerItem.isEnabled = false
             menu.addItem(headerItem)
 
+            let hotKey = HotKeyService.shared.currentKeyCombo
             let toggleItem = NSMenuItem(
                 title: connected ? "Disconnect" : "Connect",
                 action: #selector(menuToggle),
-                keyEquivalent: "a"
+                keyEquivalent: hotKey.menuKeyEquivalent
             )
-            toggleItem.keyEquivalentModifierMask = [.control, .option]
+            toggleItem.keyEquivalentModifierMask = hotKey.appKitModifierFlags
             toggleItem.target = self
             menu.addItem(toggleItem)
         } else {
@@ -232,6 +233,14 @@ public final class StatusBarController: NSObject {
         )
         setupDeviceItem.target = self
         menu.addItem(setupDeviceItem)
+
+        let shortcutItem = NSMenuItem(
+            title: "Global Shortcut (\(HotKeyService.shared.currentKeyCombo.displayString))…",
+            action: #selector(openShortcutRecorder),
+            keyEquivalent: ""
+        )
+        shortcutItem.target = self
+        menu.addItem(shortcutItem)
 
         menu.addItem(.separator())
 
@@ -308,6 +317,10 @@ public final class StatusBarController: NSObject {
 
     @objc private func openOnboarding() {
         OnboardingWindowController.shared.show()
+    }
+
+    @objc private func openShortcutRecorder() {
+        ShortcutRecorderWindowController.shared.show()
     }
 
     @objc private func selectDevice(_ sender: NSMenuItem) {

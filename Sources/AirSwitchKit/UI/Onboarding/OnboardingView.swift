@@ -89,7 +89,8 @@ final class OnboardingView: NSVisualEffectView {
         titleLabel.font = NSFont.systemFont(ofSize: 20, weight: .bold)
         titleLabel.textColor = .labelColor
 
-        let subtitleLabel = NSTextField(wrappingLabelWithString: "Select your primary headphones for one-click menu bar & ⌃⌥A instant switching.")
+        let shortcut = HotKeyService.shared.currentKeyCombo.displayString
+        let subtitleLabel = NSTextField(wrappingLabelWithString: "Select your primary headphones for one-click menu bar & \(shortcut) instant switching.")
         subtitleLabel.font = NSFont.systemFont(ofSize: 12.5, weight: .regular)
         subtitleLabel.textColor = .secondaryLabelColor
 
@@ -156,7 +157,7 @@ final class OnboardingView: NSVisualEffectView {
     }
 
     private func buildFooterSection() -> NSView {
-        let shortcutHint = NSTextField(labelWithString: "Shortcut: ⌃⌥A")
+        let shortcutHint = NSTextField(labelWithString: "Shortcut: \(HotKeyService.shared.currentKeyCombo.displayString)")
         shortcutHint.font = NSFont.monospacedSystemFont(ofSize: 11.5, weight: .medium)
         shortcutHint.textColor = .secondaryLabelColor
 
