@@ -108,15 +108,21 @@ public final class StatusBarController: NSObject {
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let dev = BluetoothManager.shared.findDevice(by: targetAddr) else { return }
-            let newState = BluetoothManager.shared.toggle(device: dev)
+            let result = BluetoothManager.shared.toggle(device: dev)
 
             DispatchQueue.main.asyncAfter(deadline: .now() + AppConstants.toggleSettleDelay) { [weak self] in
-                let battery = newState ? BluetoothManager.shared.readBattery(for: targetAddr, device: dev) : nil
+                let actualConnected = dev.isConnected()
+                let resolvedResult = ToggleResult(
+                    action: result.action,
+                    succeeded: result.action == .connect ? actualConnected : !actualConnected,
+                    isConnected: actualConnected
+                )
+                let battery = actualConnected ? BluetoothManager.shared.readBattery(for: targetAddr, device: dev) : nil
                 self?.updateUI()
                 HUDWindowController.shared.show(
                     title: targetName,
-                    subtitle: newState ? "Connected" : "Disconnected",
-                    connected: newState,
+                    subtitle: resolvedResult.hudSubtitle,
+                    connected: actualConnected,
                     battery: battery
                 )
             }

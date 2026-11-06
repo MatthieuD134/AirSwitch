@@ -3,9 +3,16 @@ import Foundation
 import IOKit
 
 public enum BatteryReader {
+    public typealias AudioAccessoryEntry = (name: String?, left: Int?, right: Int?, caseBatt: Int?)
+
     private static let audioAccessoryFrameworkLoaded: Bool = {
         Bundle(path: "/System/Library/PrivateFrameworks/AudioAccessoryServices.framework")?.load() ?? false
     }()
+
+    private static let cacheLock = NSLock()
+    private static nonisolated(unsafe) var cachedAccessoryMap: [String: AudioAccessoryEntry] = [:]
+    private static nonisolated(unsafe) var cacheTimestamp: Date = .distantPast
+    private static let cacheTTL: TimeInterval = 3.0
 
     public static func readBattery(for address: String, device: IOBluetoothDevice? = nil) -> BatteryInfo? {
         var info = BatteryInfo()
@@ -88,24 +95,50 @@ public enum BatteryReader {
 
     public static func readAudioAccessoryInfo(
         for address: String
-    ) -> (name: String?, left: Int?, right: Int?, caseBatt: Int?)? {
+    ) -> AudioAccessoryEntry? {
+        readAudioAccessoryInfo(for: address, now: Date(), loader: loadAudioAccessoryMapFromDisk)
+    }
+
+    internal static func readAudioAccessoryInfo(
+        for address: String,
+        now: Date,
+        loader: () -> [String: AudioAccessoryEntry]
+    ) -> AudioAccessoryEntry? {
+        let normalizedKey = address.normalizedBluetoothAddress
+        return cacheLock.withLock {
+            if now.timeIntervalSince(cacheTimestamp) >= cacheTTL {
+                cachedAccessoryMap = loader()
+                cacheTimestamp = now
+            }
+            return cachedAccessoryMap[normalizedKey]
+        }
+    }
+
+    internal static func resetCacheForTesting() {
+        cacheLock.withLock {
+            cachedAccessoryMap = [:]
+            cacheTimestamp = .distantPast
+        }
+    }
+
+    private static func loadAudioAccessoryMapFromDisk() -> [String: AudioAccessoryEntry] {
         _ = audioAccessoryFrameworkLoaded
         let path = ("~/Library/Preferences/com.apple.AudioAccessory.plist" as NSString).expandingTildeInPath
         guard let dict = NSDictionary(contentsOfFile: path),
               let data = dict["lastSeenBatteryInfosV2"] as? Data else {
-            return nil
+            return [:]
         }
 
         do {
             let unarchiver = try NSKeyedUnarchiver(forReadingFrom: data)
             unarchiver.requiresSecureCoding = false
             guard let map = unarchiver.decodeObject(forKey: NSKeyedArchiveRootObjectKey) as? [String: NSObject] else {
-                return nil
+                return [:]
             }
 
+            var result: [String: AudioAccessoryEntry] = [:]
             for (_, info) in map {
-                guard let btAddr = info.value(forKey: "bluetoothAddress") as? String,
-                      btAddr.matchesBluetoothAddress(address) else {
+                guard let btAddr = info.value(forKey: "bluetoothAddress") as? String else {
                     continue
                 }
 
@@ -119,17 +152,17 @@ public enum BatteryReader {
                     return (pct > 0 && pct <= 100) ? pct : nil
                 }
 
-                return (
+                result[btAddr.normalizedBluetoothAddress] = (
                     name: name,
                     left: extractLevel("batteryLeft"),
                     right: extractLevel("batteryRight"),
                     caseBatt: extractLevel("batteryCase")
                 )
             }
+            return result
         } catch {
-            return nil
+            return [:]
         }
-        return nil
     }
 
     private static func fetchIOServices(_ name: String) -> [[String: Any]]? {

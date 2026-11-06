@@ -73,4 +73,60 @@ final class AirSwitchTests: XCTestCase {
         )
         HUDWindowController.shared.dismiss()
     }
+
+    func testToggleResultEvaluationAndSubtitles() {
+        let connected = ToggleResult.evaluate(wasConnected: false, transportSucceeded: true, isConnectedNow: true)
+        XCTAssertTrue(connected.succeeded)
+        XCTAssertTrue(connected.isConnected)
+        XCTAssertEqual(connected.hudSubtitle, "Connected")
+
+        let connectUnchangedState = ToggleResult.evaluate(wasConnected: false, transportSucceeded: true, isConnectedNow: false)
+        XCTAssertFalse(connectUnchangedState.succeeded)
+        XCTAssertFalse(connectUnchangedState.isConnected)
+        XCTAssertEqual(connectUnchangedState.hudSubtitle, "Connection Failed")
+
+        let disconnected = ToggleResult.evaluate(wasConnected: true, transportSucceeded: true, isConnectedNow: false)
+        XCTAssertTrue(disconnected.succeeded)
+        XCTAssertFalse(disconnected.isConnected)
+        XCTAssertEqual(disconnected.hudSubtitle, "Disconnected")
+
+        let disconnectUnchangedState = ToggleResult.evaluate(wasConnected: true, transportSucceeded: true, isConnectedNow: true)
+        XCTAssertFalse(disconnectUnchangedState.succeeded)
+        XCTAssertTrue(disconnectUnchangedState.isConnected)
+        XCTAssertEqual(disconnectUnchangedState.hudSubtitle, "Disconnection Failed")
+    }
+
+    func testBatteryReaderCacheAvoidsRedundantLoadsWithinTTL() {
+        BatteryReader.resetCacheForTesting()
+        defer { BatteryReader.resetCacheForTesting() }
+
+        var loadCount = 0
+        let loader: () -> [String: BatteryReader.AudioAccessoryEntry] = {
+            loadCount += 1
+            return ["aa-bb-cc-dd-ee-ff": (name: "AirPods Pro", left: 90, right: 85, caseBatt: 100)]
+        }
+
+        let t0 = Date(timeIntervalSince1970: 1_000)
+        let first = BatteryReader.readAudioAccessoryInfo(for: "AA:BB:CC:DD:EE:FF", now: t0, loader: loader)
+        XCTAssertEqual(first?.name, "AirPods Pro")
+        XCTAssertEqual(loadCount, 1)
+
+        // Cached missing address within TTL must not trigger a reload
+        let missing = BatteryReader.readAudioAccessoryInfo(
+            for: "11:22:33:44:55:66",
+            now: t0.addingTimeInterval(1.0),
+            loader: loader
+        )
+        XCTAssertNil(missing)
+        XCTAssertEqual(loadCount, 1)
+
+        // Lookup after 3.0s TTL expires triggers exactly one reload
+        let afterExpiry = BatteryReader.readAudioAccessoryInfo(
+            for: "AA:BB:CC:DD:EE:FF",
+            now: t0.addingTimeInterval(3.1),
+            loader: loader
+        )
+        XCTAssertEqual(afterExpiry?.left, 90)
+        XCTAssertEqual(loadCount, 2)
+    }
 }
