@@ -12,6 +12,7 @@ public final class Preferences {
         static let autoDisconnectOnSleep = "autoDisconnectOnSleep"
         static let showHUD = "showHUD"
         static let hudAnimations = "hudAnimations"
+        static let hasCompletedOnboarding = "hasCompletedOnboarding"
     }
 
     private init() {
@@ -19,7 +20,8 @@ public final class Preferences {
             Keys.autoConnectOnWake: true,
             Keys.autoDisconnectOnSleep: true,
             Keys.showHUD: true,
-            Keys.hudAnimations: true
+            Keys.hudAnimations: true,
+            Keys.hasCompletedOnboarding: false
         ])
     }
 
@@ -53,8 +55,14 @@ public final class Preferences {
         set { defaults.set(newValue, forKey: Keys.hudAnimations) }
     }
 
+    public var hasCompletedOnboarding: Bool {
+        get { defaults.bool(forKey: Keys.hasCompletedOnboarding) }
+        set { defaults.set(newValue, forKey: Keys.hasCompletedOnboarding) }
+    }
+
     public func setTargetDevice(address: String, name: String) {
         targetDeviceAddress = address
         targetDeviceName = name
+        hasCompletedOnboarding = true
     }
 }

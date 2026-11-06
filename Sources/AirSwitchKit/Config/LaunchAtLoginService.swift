@@ -6,6 +6,12 @@ public enum LaunchAtLoginService {
         SMAppService.mainApp.status == .enabled
     }
 
+    public static func setEnabled(_ enabled: Bool) {
+        if isEnabled != enabled {
+            toggle()
+        }
+    }
+
     public static func toggle() {
         do {
             if isEnabled {

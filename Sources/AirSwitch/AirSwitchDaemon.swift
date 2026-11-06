@@ -10,8 +10,6 @@ enum AirSwitchDaemon {
         let app = NSApplication.shared
         app.setActivationPolicy(.accessory) // No dock icon, menu bar only
 
-        BluetoothManager.shared.ensureDefaultTargetDevice()
-
         _ = StatusBarController.shared
         SleepWakeService.shared.start()
 
@@ -20,6 +18,8 @@ enum AirSwitchDaemon {
                 StatusBarController.shared.toggleConnection()
             }
         }
+
+        OnboardingWindowController.shared.presentIfNeeded()
 
         NSLog("[AirSwitch] Daemon started. Hotkey ⌃⌥A registered.")
         app.run()

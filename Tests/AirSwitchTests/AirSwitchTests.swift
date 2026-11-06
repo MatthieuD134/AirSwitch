@@ -180,4 +180,36 @@ final class AirSwitchTests: XCTestCase {
         XCTAssertEqual(normalDisconnected.statusText, "Disconnected")
         XCTAssertNil(normalDisconnected.batteryText)
     }
+
+    func testOnboardingStateShouldPresentOnLaunch() {
+        XCTAssertTrue(OnboardingState.shouldPresentOnLaunch(hasCompletedOnboarding: false, targetDeviceAddress: nil))
+        XCTAssertTrue(OnboardingState.shouldPresentOnLaunch(hasCompletedOnboarding: false, targetDeviceAddress: "   "))
+        XCTAssertFalse(OnboardingState.shouldPresentOnLaunch(hasCompletedOnboarding: true, targetDeviceAddress: nil))
+        XCTAssertFalse(OnboardingState.shouldPresentOnLaunch(hasCompletedOnboarding: false, targetDeviceAddress: "aa-bb-cc-dd-ee-ff"))
+        XCTAssertFalse(OnboardingState.shouldPresentOnLaunch(hasCompletedOnboarding: true, targetDeviceAddress: "aa-bb-cc-dd-ee-ff"))
+    }
+
+    func testOnboardingStateRecommendedDeviceSelection() {
+        let speaker = AudioDevice(id: "11-22-33-44-55-66", name: "Bose Speaker", isConnected: true, battery: nil)
+        let airpods = AudioDevice(id: "aa-bb-cc-dd-ee-ff", name: "Matthieu’s AirPods Pro", isConnected: false, battery: nil)
+        let xm5 = AudioDevice(id: "77-88-99-aa-bb-cc", name: "Sony WH-1000XM5", isConnected: false, battery: nil)
+
+        // Prefers AirPods when no current target is set
+        XCTAssertEqual(
+            OnboardingState.recommendedDeviceID(from: [speaker, airpods, xm5], currentTargetAddress: nil),
+            "aa-bb-cc-dd-ee-ff"
+        )
+
+        // Respects existing target address even with colon formatting
+        XCTAssertEqual(
+            OnboardingState.recommendedDeviceID(from: [speaker, airpods, xm5], currentTargetAddress: "77:88:99:AA:BB:CC"),
+            "77-88-99-aa-bb-cc"
+        )
+
+        // Falls back to connected device when no AirPods are present
+        XCTAssertEqual(
+            OnboardingState.recommendedDeviceID(from: [xm5, speaker], currentTargetAddress: nil),
+            "11-22-33-44-55-66"
+        )
+    }
 }

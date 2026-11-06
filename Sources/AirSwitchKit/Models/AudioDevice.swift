@@ -17,14 +17,14 @@ public struct AudioDevice: Identifiable {
     public let name: String
     public let isConnected: Bool
     public let battery: BatteryInfo?
-    public let rawDevice: IOBluetoothDevice
+    public let rawDevice: IOBluetoothDevice?
 
     public init(
         id: String,
         name: String,
         isConnected: Bool,
         battery: BatteryInfo?,
-        rawDevice: IOBluetoothDevice
+        rawDevice: IOBluetoothDevice? = nil
     ) {
         self.id = id
         self.name = name
