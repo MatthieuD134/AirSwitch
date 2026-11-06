@@ -13,6 +13,7 @@ public final class Preferences {
         static let showHUD = "showHUD"
         static let hudAnimations = "hudAnimations"
         static let hasCompletedOnboarding = "hasCompletedOnboarding"
+        static let lastUpdateCheckTimestamp = "lastUpdateCheckTimestamp"
     }
 
     private init() {
@@ -58,6 +59,11 @@ public final class Preferences {
     public var hasCompletedOnboarding: Bool {
         get { defaults.bool(forKey: Keys.hasCompletedOnboarding) }
         set { defaults.set(newValue, forKey: Keys.hasCompletedOnboarding) }
+    }
+
+    public var lastUpdateCheckTimestamp: TimeInterval {
+        get { defaults.double(forKey: Keys.lastUpdateCheckTimestamp) }
+        set { defaults.set(newValue, forKey: Keys.lastUpdateCheckTimestamp) }
     }
 
     public func setTargetDevice(address: String, name: String) {
