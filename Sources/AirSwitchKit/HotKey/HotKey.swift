@@ -7,16 +7,21 @@ public final class HotKey {
     nonisolated(unsafe) internal var carbonHotKey: EventHotKeyRef?
     nonisolated(unsafe) internal var carbonID: UInt32 = 0
 
+    public var isRegistered: Bool {
+        carbonHotKey != nil
+    }
+
     public init(keyCombo: KeyCombo, keyDownHandler: (() -> Void)? = nil) {
         self.keyCombo = keyCombo
         self.keyDownHandler = keyDownHandler
         GlobalHotKeyCenter.shared.register(self)
     }
 
+    public func unregister() {
+        GlobalHotKeyCenter.shared.unregister(self)
+    }
+
     deinit {
-        if let carbonHotKey {
-            UnregisterEventHotKey(carbonHotKey)
-        }
-        GlobalHotKeyCenter.shared.removeRegistration(id: carbonID)
+        unregister()
     }
 }

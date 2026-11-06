@@ -14,6 +14,7 @@ public final class Preferences {
         static let hudAnimations = "hudAnimations"
         static let hasCompletedOnboarding = "hasCompletedOnboarding"
         static let lastUpdateCheckTimestamp = "lastUpdateCheckTimestamp"
+        static let hotKeyCombo = "hotKeyCombo"
     }
 
     private init() {
@@ -64,6 +65,25 @@ public final class Preferences {
     public var lastUpdateCheckTimestamp: TimeInterval {
         get { defaults.double(forKey: Keys.lastUpdateCheckTimestamp) }
         set { defaults.set(newValue, forKey: Keys.lastUpdateCheckTimestamp) }
+    }
+
+    public var hotKeyCombo: KeyCombo {
+        get {
+            guard let data = defaults.data(forKey: Keys.hotKeyCombo),
+                  let decoded = try? JSONDecoder().decode(KeyCombo.self, from: data),
+                  decoded.isValidShortcut else {
+                return .defaultToggle
+            }
+            return decoded
+        }
+        set {
+            guard newValue.isValidShortcut,
+                  let data = try? JSONEncoder().encode(newValue) else {
+                defaults.removeObject(forKey: Keys.hotKeyCombo)
+                return
+            }
+            defaults.set(data, forKey: Keys.hotKeyCombo)
+        }
     }
 
     public func setTargetDevice(address: String, name: String) {

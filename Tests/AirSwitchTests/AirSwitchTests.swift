@@ -430,4 +430,97 @@ final class AirSwitchTests: XCTestCase {
         monitor.invalidatePendingConnectionHUD(for: target)
         XCTAssertNotEqual(monitor.currentGeneration(for: target), genBefore)
     }
+
+    func testKeyComboFormattingValidationAndCodable() throws {
+        let defaultCombo = KeyCombo.defaultToggle
+        XCTAssertEqual(defaultCombo.displayString, "⌃⌥A")
+        XCTAssertEqual(defaultCombo.menuKeyEquivalent, "a")
+        XCTAssertEqual(defaultCombo.appKitModifierFlags, [.control, .option])
+        XCTAssertTrue(defaultCombo.isValidShortcut)
+
+        // Recording a valid Command + Shift + K shortcut
+        let cmdShiftK = KeyCombo.from(keyCode: 40, modifierFlags: [.command, .shift]) // 40 = kVK_ANSI_K
+        XCTAssertNotNil(cmdShiftK)
+        XCTAssertEqual(cmdShiftK?.displayString, "⇧⌘K")
+        XCTAssertEqual(cmdShiftK?.menuKeyEquivalent, "k")
+
+        // Special keys map to AppKit control/function characters rather than display glyphs
+        let ctrlReturn = KeyCombo.from(keyCode: 36, modifierFlags: [.control]) // 36 = kVK_Return
+        XCTAssertEqual(ctrlReturn?.displayString, "⌃↩")
+        XCTAssertEqual(ctrlReturn?.menuKeyEquivalent, "\r")
+
+        let ctrlTab = KeyCombo.from(keyCode: 48, modifierFlags: [.control]) // 48 = kVK_Tab
+        XCTAssertEqual(ctrlTab?.displayString, "⌃⇥")
+        XCTAssertEqual(ctrlTab?.menuKeyEquivalent, "\t")
+
+        let optLeftArrow = KeyCombo.from(keyCode: 123, modifierFlags: [.option]) // 123 = kVK_LeftArrow
+        XCTAssertEqual(optLeftArrow?.displayString, "⌥←")
+        XCTAssertEqual(optLeftArrow?.menuKeyEquivalent, String(UnicodeScalar(NSLeftArrowFunctionKey)!))
+
+        let cmdF1 = KeyCombo.from(keyCode: 122, modifierFlags: [.command]) // 122 = kVK_F1
+        XCTAssertEqual(cmdF1?.displayString, "⌘F1")
+        XCTAssertEqual(cmdF1?.menuKeyEquivalent, String(UnicodeScalar(NSF1FunctionKey)!))
+
+        // QWERTZ layout translator swaps physical ANSI-Z (keyCode 6) to 'Y'
+        let qwertzTranslator: (UInt32) -> String? = { code in
+            if code == 6 { return "y" } // kVK_ANSI_Z physical key produces 'y' on QWERTZ
+            if code == 16 { return "z" } // kVK_ANSI_Y physical key produces 'z' on QWERTZ
+            return nil
+        }
+        let physicalZCombo = KeyCombo.from(keyCode: 6, modifierFlags: [.control, .option])!
+        XCTAssertEqual(physicalZCombo.displayString(layoutTranslator: qwertzTranslator), "⌃⌥Y")
+        XCTAssertEqual(physicalZCombo.menuKeyEquivalent(layoutTranslator: qwertzTranslator), "y")
+
+        // Rejects unmodified keys, Shift-only keys, and Escape
+        XCTAssertNil(KeyCombo.from(keyCode: 0, modifierFlags: []))
+        XCTAssertNil(KeyCombo.from(keyCode: 0, modifierFlags: [.shift]))
+        XCTAssertNil(KeyCombo.from(keyCode: 53, modifierFlags: [.command])) // 53 = kVK_Escape
+
+        // Codable round-trip
+        let data = try JSONEncoder().encode(cmdShiftK)
+        let decoded = try JSONDecoder().decode(KeyCombo.self, from: data)
+        XCTAssertEqual(decoded, cmdShiftK)
+    }
+
+    @MainActor
+    func testHotKeyServiceFallbackAndInactiveRecorderWindow() {
+        let originalCombo = Preferences.shared.hotKeyCombo
+        defer { Preferences.shared.hotKeyCombo = originalCombo }
+
+        let customCombo = KeyCombo.from(keyCode: 40, modifierFlags: [.command, .shift])! // ⇧⌘K
+        Preferences.shared.hotKeyCombo = customCombo
+
+        // 1. Preferred shortcut fails registration, fallback (.defaultToggle) succeeds
+        let fallbackService = HotKeyService { combo, _ in
+            HotKeyService.RegistrationHandle(
+                keyCombo: combo,
+                isRegistered: combo == .defaultToggle,
+                unregister: {}
+            )
+        }
+        XCTAssertTrue(fallbackService.start(handler: {}))
+        XCTAssertTrue(fallbackService.isActive)
+        XCTAssertEqual(fallbackService.currentKeyCombo, .defaultToggle)
+
+        // 2. Both preferred and fallback fail registration
+        let failingService = HotKeyService { combo, _ in
+            HotKeyService.RegistrationHandle(
+                keyCombo: combo,
+                isRegistered: false,
+                unregister: {}
+            )
+        }
+        XCTAssertFalse(failingService.start(handler: {}))
+        XCTAssertFalse(failingService.isActive)
+
+        // 3. Inactive recorder window ignores key events and leaves saved shortcut unchanged
+        Preferences.shared.hotKeyCombo = .defaultToggle
+        let handledWhenInactive = ShortcutRecorderWindowController.shared.handleKeyInput(
+            keyCode: 40,
+            modifiers: [.command, .shift],
+            isKeyWindow: false
+        )
+        XCTAssertFalse(handledWhenInactive)
+        XCTAssertEqual(Preferences.shared.hotKeyCombo, .defaultToggle)
+    }
 }
