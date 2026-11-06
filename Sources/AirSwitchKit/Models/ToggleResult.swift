@@ -39,13 +39,13 @@ public struct ToggleResult: Equatable, Sendable {
     public var hudSubtitle: String {
         switch (action, succeeded) {
         case (.connect, true):
-            return "Connected"
+            return L10n.connected
         case (.connect, false):
-            return "Connection Failed"
+            return L10n.connectionFailed
         case (.disconnect, true):
-            return "Disconnected"
+            return L10n.disconnected
         case (.disconnect, false):
-            return "Disconnection Failed"
+            return L10n.disconnectionFailed
         }
     }
 }

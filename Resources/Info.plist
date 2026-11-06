@@ -2,6 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
 	<key>CFBundleDisplayName</key>
 	<string>AirSwitch</string>
 	<key>CFBundleExecutable</key>
@@ -10,6 +12,25 @@
 	<string>AppIcon</string>
 	<key>CFBundleIdentifier</key>
 	<string>io.github.airswitch</string>
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>en</string>
+		<string>fr</string>
+		<string>de</string>
+		<string>es</string>
+		<string>it</string>
+		<string>pt</string>
+		<string>nl</string>
+		<string>pl</string>
+		<string>ru</string>
+		<string>tr</string>
+		<string>ar</string>
+		<string>hi</string>
+		<string>ja</string>
+		<string>ko</string>
+		<string>zh-Hans</string>
+		<string>zh-Hant</string>
+	</array>
 	<key>CFBundleName</key>
 	<string>AirSwitch</string>
 	<key>CFBundlePackageType</key>

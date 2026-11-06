@@ -15,6 +15,7 @@ public final class Preferences {
         static let hasCompletedOnboarding = "hasCompletedOnboarding"
         static let lastUpdateCheckTimestamp = "lastUpdateCheckTimestamp"
         static let hotKeyCombo = "hotKeyCombo"
+        static let appLanguage = "appLanguage"
     }
 
     private init() {
@@ -65,6 +66,17 @@ public final class Preferences {
     public var lastUpdateCheckTimestamp: TimeInterval {
         get { defaults.double(forKey: Keys.lastUpdateCheckTimestamp) }
         set { defaults.set(newValue, forKey: Keys.lastUpdateCheckTimestamp) }
+    }
+
+    public var appLanguage: String? {
+        get { defaults.string(forKey: Keys.appLanguage) }
+        set {
+            if let newValue, AppLanguage.resolve(identifier: newValue) != nil {
+                defaults.set(newValue, forKey: Keys.appLanguage)
+            } else {
+                defaults.removeObject(forKey: Keys.appLanguage)
+            }
+        }
     }
 
     public var hotKeyCombo: KeyCombo {

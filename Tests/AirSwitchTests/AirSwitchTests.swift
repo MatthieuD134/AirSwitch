@@ -2,6 +2,19 @@ import XCTest
 @testable import AirSwitchKit
 
 final class AirSwitchTests: XCTestCase {
+    private var savedLanguage: String?
+
+    override func setUp() {
+        super.setUp()
+        savedLanguage = Preferences.shared.appLanguage
+        Preferences.shared.appLanguage = AppLanguage.en.rawValue
+    }
+
+    override func tearDown() {
+        Preferences.shared.appLanguage = savedLanguage
+        super.tearDown()
+    }
+
     func testBatteryInfoSingle() {
         let info = BatteryInfo(single: 85, left: nil, right: nil, caseBattery: nil)
         XCTAssertEqual(info.displayString, "85%")
@@ -628,5 +641,76 @@ final class AirSwitchTests: XCTestCase {
         // Rejects tag containing shell metacharacters
         let badStatus = try run(["bash", scriptPath, "--tag", "v0.2.0;$(id)"], expectSuccess: false)
         XCTAssertNotEqual(badStatus, 0)
+    }
+
+    @MainActor
+    func testAppLanguageResolutionAndLocalizedHUDDisplay() {
+        // BCP-47 system language resolution
+        XCTAssertEqual(AppLanguage.resolveSystemLanguage(preferredLanguages: ["fr-CH", "en-US"]), .fr)
+        XCTAssertEqual(AppLanguage.resolveSystemLanguage(preferredLanguages: ["zh-Hant-HK", "en-US"]), .zhHant)
+        XCTAssertEqual(AppLanguage.resolveSystemLanguage(preferredLanguages: ["zh-TW"]), .zhHant)
+        XCTAssertEqual(AppLanguage.resolveSystemLanguage(preferredLanguages: ["zh-CN"]), .zhHans)
+        XCTAssertEqual(AppLanguage.resolveSystemLanguage(preferredLanguages: ["pt_BR"]), .pt)
+        XCTAssertEqual(AppLanguage.resolveSystemLanguage(preferredLanguages: ["sv-SE", "de-DE"]), .de)
+        XCTAssertEqual(AppLanguage.resolveSystemLanguage(preferredLanguages: ["sv-SE", "fi-FI"]), .en)
+
+        // Manual override in Preferences switches L10n, BatteryInfo, LowBatteryAlert, and HUDWindowController
+        Preferences.shared.appLanguage = "fr"
+        XCTAssertEqual(L10n.currentLanguage, .fr)
+        XCTAssertEqual(L10n.connected, "Connecté")
+        XCTAssertEqual(LowBatteryAlert(threshold: 20, currentPercent: 15).hudSubtitle, "Batterie faible (15%)")
+
+        let battery = BatteryInfo(single: nil, left: 90, right: 85, caseBattery: 100)
+        XCTAssertEqual(battery.displayString, "G: 90% · D: 85% · Boîtier: 100%")
+
+        let transitioning = HUDWindowController.resolveDisplayContent(
+            title: "AirPods Pro",
+            subtitle: L10n.connecting,
+            connected: true,
+            battery: nil
+        )
+        XCTAssertTrue(transitioning.isTransitioning)
+        XCTAssertEqual(transitioning.statusText, "Connexion…")
+
+        let connectedHUD = HUDWindowController.resolveDisplayContent(
+            title: "AirPods Pro",
+            subtitle: L10n.connected,
+            connected: true,
+            battery: battery
+        )
+        XCTAssertFalse(connectedHUD.isTransitioning)
+        XCTAssertEqual(connectedHUD.statusText, "AirPods Pro")
+        XCTAssertEqual(connectedHUD.batteryText, "G 90% · D 85% · Boîtier 100%")
+
+        let disconnectedHUD = HUDWindowController.resolveDisplayContent(
+            title: "AirPods Pro",
+            subtitle: L10n.disconnected,
+            connected: false,
+            battery: nil
+        )
+        XCTAssertEqual(disconnectedHUD.statusText, "Déconnecté")
+
+        let failedHUD = HUDWindowController.resolveDisplayContent(
+            title: "AirPods Pro",
+            subtitle: L10n.connectionFailed,
+            connected: false,
+            battery: battery
+        )
+        XCTAssertEqual(failedHUD.statusText, "Échec de la connexion")
+        XCTAssertNil(failedHUD.batteryText)
+
+        // Invalid language identifier clears override back to nil (System Default)
+        Preferences.shared.appLanguage = "invalid-lang"
+        XCTAssertNil(Preferences.shared.appLanguage)
+
+        // Every supported language has non-empty core strings
+        for lang in AppLanguage.allCases {
+            Preferences.shared.appLanguage = lang.rawValue
+            XCTAssertEqual(L10n.currentLanguage, lang)
+            XCTAssertFalse(L10n.connected.isEmpty)
+            XCTAssertFalse(L10n.disconnected.isEmpty)
+            XCTAssertFalse(L10n.welcomeToAirSwitch.isEmpty)
+            XCTAssertFalse(L10n.quitAirSwitch.isEmpty)
+        }
     }
 }

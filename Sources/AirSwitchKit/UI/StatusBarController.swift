@@ -125,7 +125,7 @@ public final class StatusBarController: NSObject {
 
         HUDWindowController.shared.show(
             title: targetName,
-            subtitle: willConnect ? "Connecting..." : "Disconnecting...",
+            subtitle: willConnect ? L10n.connecting : L10n.disconnecting,
             connected: willConnect,
             battery: nil
         )
@@ -175,7 +175,7 @@ public final class StatusBarController: NSObject {
             let connected = target.device.isConnected()
             let battery = connected ? BluetoothManager.shared.readBattery(for: target.address, device: target.device) : nil
             let batterySuffix = battery.map { " (\($0.displayString))" } ?? ""
-            let statusText = connected ? "Connected\(batterySuffix)" : "Disconnected"
+            let statusText = connected ? "\(L10n.connected)\(batterySuffix)" : L10n.disconnected
 
             let headerItem = NSMenuItem(title: "\(target.name) — \(statusText)", action: nil, keyEquivalent: "")
             headerItem.isEnabled = false
@@ -183,7 +183,7 @@ public final class StatusBarController: NSObject {
 
             let hotKey = HotKeyService.shared.currentKeyCombo
             let toggleItem = NSMenuItem(
-                title: connected ? "Disconnect" : "Connect",
+                title: connected ? L10n.disconnect : L10n.connect,
                 action: #selector(menuToggle),
                 keyEquivalent: hotKey.menuKeyEquivalent
             )
@@ -191,7 +191,7 @@ public final class StatusBarController: NSObject {
             toggleItem.target = self
             menu.addItem(toggleItem)
         } else {
-            let headerItem = NSMenuItem(title: "AirSwitch — No target device", action: nil, keyEquivalent: "")
+            let headerItem = NSMenuItem(title: L10n.noTargetDeviceHeader, action: nil, keyEquivalent: "")
             headerItem.isEnabled = false
             menu.addItem(headerItem)
         }
@@ -199,12 +199,12 @@ public final class StatusBarController: NSObject {
         menu.addItem(.separator())
 
         // 2. Device Picker Submenu
-        let devicesItem = NSMenuItem(title: "Target Audio Device", action: nil, keyEquivalent: "")
+        let devicesItem = NSMenuItem(title: L10n.targetAudioDevice, action: nil, keyEquivalent: "")
         let devicesSubmenu = NSMenu()
 
         let paired = BluetoothManager.shared.getPairedAudioDevices()
         if paired.isEmpty {
-            let emptyItem = NSMenuItem(title: "No paired audio devices found", action: nil, keyEquivalent: "")
+            let emptyItem = NSMenuItem(title: L10n.noPairedAudioDevicesFound, action: nil, keyEquivalent: "")
             emptyItem.isEnabled = false
             devicesSubmenu.addItem(emptyItem)
         } else {
@@ -223,7 +223,7 @@ public final class StatusBarController: NSObject {
         menu.addItem(devicesItem)
 
         let shortcutItem = NSMenuItem(
-            title: "Global Shortcut (\(HotKeyService.shared.currentKeyCombo.displayString))…",
+            title: L10n.globalShortcutMenu(HotKeyService.shared.currentKeyCombo.displayString),
             action: #selector(openShortcutRecorder),
             keyEquivalent: ""
         )
@@ -235,41 +235,77 @@ public final class StatusBarController: NSObject {
         // 3. Automation & UI Toggles
         addToggleItem(
             to: menu,
-            title: "Auto-connect on Wake (Lid Open)",
+            title: L10n.autoConnectOnWake,
             action: #selector(toggleAutoConnect),
             isOn: Preferences.shared.autoConnectOnWake
         )
         addToggleItem(
             to: menu,
-            title: "Auto-disconnect on Sleep (Lid Close)",
+            title: L10n.autoDisconnectOnSleep,
             action: #selector(toggleAutoDisconnect),
             isOn: Preferences.shared.autoDisconnectOnSleep
         )
         addToggleItem(
             to: menu,
-            title: "Show Floating Battery HUD",
+            title: L10n.showFloatingBatteryHUD,
             action: #selector(toggleShowHUD),
             isOn: Preferences.shared.showHUD
         )
         addToggleItem(
             to: menu,
-            title: "HUD Animations",
+            title: L10n.hudAnimations,
             action: #selector(toggleHUDAnimations),
             isOn: Preferences.shared.hudAnimations
         )
         addToggleItem(
             to: menu,
-            title: "Launch at Login",
+            title: L10n.launchAtLogin,
             action: #selector(toggleLaunchAtLogin),
             isOn: LaunchAtLoginService.isEnabled
         )
+
+        // Language Picker Submenu
+        let languageItem = NSMenuItem(title: L10n.languageMenu, action: nil, keyEquivalent: "")
+        let languageSubmenu = NSMenu()
+        let savedLanguage = Preferences.shared.appLanguage
+        let systemResolved = AppLanguage.resolveSystemLanguage()
+
+        let systemItem = NSMenuItem(
+            title: L10n.systemDefaultLanguage(systemResolved.nativeName),
+            action: #selector(selectLanguage(_:)),
+            keyEquivalent: ""
+        )
+        systemItem.target = self
+        systemItem.representedObject = nil
+        if savedLanguage == nil {
+            systemItem.state = .on
+        }
+        languageSubmenu.addItem(systemItem)
+        languageSubmenu.addItem(.separator())
+
+        for lang in AppLanguage.allCases {
+            let item = NSMenuItem(
+                title: lang.nativeName,
+                action: #selector(selectLanguage(_:)),
+                keyEquivalent: ""
+            )
+            item.target = self
+            item.representedObject = lang.rawValue
+            if savedLanguage == lang.rawValue {
+                item.state = .on
+            }
+            languageSubmenu.addItem(item)
+        }
+
+        languageItem.submenu = languageSubmenu
+        menu.addItem(languageItem)
 
         menu.addItem(.separator())
 
         // 4. Updates & Quit
         if let update = ReleaseCheckService.shared.availableUpdate {
             let installItem = NSMenuItem(
-                title: "Install Update (\(update.tagName))…",
+                title: L10n.installUpdate(update.tagName),
                 action: #selector(installAvailableUpdate),
                 keyEquivalent: ""
             )
@@ -277,7 +313,7 @@ public final class StatusBarController: NSObject {
             menu.addItem(installItem)
         } else {
             let checkUpdatesItem = NSMenuItem(
-                title: "Check for Updates…",
+                title: L10n.checkForUpdates,
                 action: #selector(checkForUpdatesManually),
                 keyEquivalent: ""
             )
@@ -285,7 +321,7 @@ public final class StatusBarController: NSObject {
             menu.addItem(checkUpdatesItem)
         }
 
-        let quitItem = NSMenuItem(title: "Quit AirSwitch", action: #selector(quitApp), keyEquivalent: "q")
+        let quitItem = NSMenuItem(title: L10n.quitAirSwitch, action: #selector(quitApp), keyEquivalent: "q")
         quitItem.target = self
         menu.addItem(quitItem)
 
@@ -319,9 +355,21 @@ public final class StatusBarController: NSObject {
         BluetoothConnectionMonitor.shared.seedState(for: addr, isConnected: isConnected)
         HUDWindowController.shared.show(
             title: sender.title,
-            subtitle: "Selected as primary device",
+            subtitle: L10n.selectedAsPrimaryDevice,
             connected: isConnected,
             battery: battery
+        )
+    }
+
+    @objc private func selectLanguage(_ sender: NSMenuItem) {
+        Preferences.shared.appLanguage = sender.representedObject as? String
+        OnboardingWindowController.shared.refreshLocalization()
+        ShortcutRecorderWindowController.shared.refreshLocalization()
+        HUDWindowController.shared.show(
+            title: L10n.languageMenu,
+            subtitle: L10n.currentLanguage.nativeName,
+            connected: true,
+            battery: nil
         )
     }
 
@@ -359,7 +407,7 @@ public final class StatusBarController: NSObject {
                 } else {
                     HUDWindowController.shared.show(
                         title: "AirSwitch v\(AppConstants.version)",
-                        subtitle: "Up to date",
+                        subtitle: L10n.upToDate,
                         connected: true,
                         battery: nil
                     )
@@ -367,7 +415,7 @@ public final class StatusBarController: NSObject {
             case .failure:
                 HUDWindowController.shared.show(
                     title: AppConstants.appName,
-                    subtitle: "Update Check Failed",
+                    subtitle: L10n.updateCheckFailed,
                     connected: false,
                     battery: nil
                 )

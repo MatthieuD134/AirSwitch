@@ -30,7 +30,7 @@ final class OnboardingView: NSView {
     private let scrollView = NSScrollView()
     private let documentContainer = FlippedStackContainerView()
     private let deviceListStack = NSStackView()
-    private let confirmButton = NSButton(title: "Continue", target: nil, action: nil)
+    private let confirmButton = NSButton(title: L10n.continueButton, target: nil, action: nil)
 
     private let onRefreshRequested: () -> [AudioDevice]
     private let onComplete: (Configuration) -> Void
@@ -71,12 +71,12 @@ final class OnboardingView: NSView {
 
     private func setupLayout() {
         let refreshButton = NSButton()
-        refreshButton.image = NSImage(systemSymbolName: "arrow.clockwise", accessibilityDescription: "Refresh devices")
+        refreshButton.image = NSImage(systemSymbolName: "arrow.clockwise", accessibilityDescription: L10n.refreshDevices)
         refreshButton.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 12, weight: .medium)
         refreshButton.bezelStyle = .inline
         refreshButton.isBordered = false
         refreshButton.contentTintColor = Palette.secondaryText
-        refreshButton.toolTip = "Refresh paired devices"
+        refreshButton.toolTip = L10n.refreshPairedDevices
         refreshButton.target = self
         refreshButton.action = #selector(handleRefresh)
         refreshButton.translatesAutoresizingMaskIntoConstraints = false
@@ -131,12 +131,12 @@ final class OnboardingView: NSView {
             iconView.centerYAnchor.constraint(equalTo: badgeContainer.centerYAnchor)
         ])
 
-        let titleLabel = NSTextField(labelWithString: "Welcome to AirSwitch")
+        let titleLabel = NSTextField(labelWithString: L10n.welcomeToAirSwitch)
         titleLabel.font = NSFont.systemFont(ofSize: 18.5, weight: .bold)
         titleLabel.textColor = Palette.primaryText
         titleLabel.alignment = .center
 
-        let subtitleLabel = NSTextField(labelWithString: "Choose your primary headphones")
+        let subtitleLabel = NSTextField(labelWithString: L10n.choosePrimaryHeadphones)
         subtitleLabel.font = NSFont.systemFont(ofSize: 12.5, weight: .regular)
         subtitleLabel.textColor = Palette.secondaryText
         subtitleLabel.alignment = .center
@@ -213,7 +213,7 @@ final class OnboardingView: NSView {
             keycapLabel.bottomAnchor.constraint(equalTo: keycapView.bottomAnchor, constant: -2)
         ])
 
-        let hintText = NSTextField(labelWithString: "Toggle connection anytime")
+        let hintText = NSTextField(labelWithString: L10n.toggleConnectionAnytime)
         hintText.font = NSFont.systemFont(ofSize: 11.5, weight: .regular)
         hintText.textColor = Palette.secondaryText
 
@@ -245,12 +245,12 @@ final class OnboardingView: NSView {
         rowViews.removeAll()
 
         if ordered.isEmpty {
-            let emptyLabel = NSTextField(wrappingLabelWithString: "No paired Bluetooth headphones found.\nPair your headphones in Bluetooth Settings, then click ↻.")
+            let emptyLabel = NSTextField(wrappingLabelWithString: L10n.emptyPairedDevicesMessage)
             emptyLabel.font = NSFont.systemFont(ofSize: 12.5, weight: .regular)
             emptyLabel.textColor = Palette.secondaryText
             emptyLabel.alignment = .center
             deviceListStack.addArrangedSubview(emptyLabel)
-            confirmButton.title = "Continue Without Device"
+            confirmButton.title = L10n.continueWithoutDevice
         } else {
             for device in ordered {
                 let row = OnboardingDeviceRowView(
@@ -263,7 +263,7 @@ final class OnboardingView: NSView {
                 deviceListStack.addArrangedSubview(row)
                 row.widthAnchor.constraint(equalTo: deviceListStack.widthAnchor).isActive = true
             }
-            confirmButton.title = "Continue"
+            confirmButton.title = L10n.continueButton
         }
 
         layoutSubtreeIfNeeded()

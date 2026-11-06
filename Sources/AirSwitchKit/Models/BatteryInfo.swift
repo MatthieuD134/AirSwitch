@@ -24,22 +24,25 @@ public struct BatteryInfo: Equatable, Sendable {
     }
 
     public var displayString: String {
+        let lLabel = L10n.batteryLeftShort
+        let rLabel = L10n.batteryRightShort
+        let caseLabel = L10n.batteryCase
         if let l = left, let r = right {
             if let c = caseBattery, c > 0 {
-                return "L: \(l)% · R: \(r)% · Case: \(c)%"
+                return "\(lLabel): \(l)% · \(rLabel): \(r)% · \(caseLabel): \(c)%"
             }
-            return "L: \(l)% · R: \(r)%"
+            return "\(lLabel): \(l)% · \(rLabel): \(r)%"
         }
         if let l = left {
-            if let c = caseBattery, c > 0 { return "L: \(l)% · Case: \(c)%" }
-            return "L: \(l)%"
+            if let c = caseBattery, c > 0 { return "\(lLabel): \(l)% · \(caseLabel): \(c)%" }
+            return "\(lLabel): \(l)%"
         }
         if let r = right {
-            if let c = caseBattery, c > 0 { return "R: \(r)% · Case: \(c)%" }
-            return "R: \(r)%"
+            if let c = caseBattery, c > 0 { return "\(rLabel): \(r)% · \(caseLabel): \(c)%" }
+            return "\(rLabel): \(r)%"
         }
         if let c = caseBattery, c > 0 {
-            return "Case: \(c)%"
+            return "\(caseLabel): \(c)%"
         }
         if let s = single, s > 0 {
             return "\(s)%"
@@ -48,26 +51,29 @@ public struct BatteryInfo: Equatable, Sendable {
     }
 
     public var hudDisplayString: String? {
+        let lLabel = L10n.batteryLeftShort
+        let rLabel = L10n.batteryRightShort
+        let caseLabel = L10n.batteryCase
         if let l = left, let r = right {
             if let c = caseBattery, c > 0 {
-                return "L \(l)% · R \(r)% · Case \(c)%"
+                return "\(lLabel) \(l)% · \(rLabel) \(r)% · \(caseLabel) \(c)%"
             }
-            return "L \(l)% · R \(r)%"
+            return "\(lLabel) \(l)% · \(rLabel) \(r)%"
         }
         if let l = left {
-            if let c = caseBattery, c > 0 { return "L \(l)% · Case \(c)%" }
-            return "L \(l)%"
+            if let c = caseBattery, c > 0 { return "\(lLabel) \(l)% · \(caseLabel) \(c)%" }
+            return "\(lLabel) \(l)%"
         }
         if let r = right {
-            if let c = caseBattery, c > 0 { return "R \(r)% · Case \(c)%" }
-            return "R \(r)%"
+            if let c = caseBattery, c > 0 { return "\(rLabel) \(r)% · \(caseLabel) \(c)%" }
+            return "\(rLabel) \(r)%"
         }
         if let s = single ?? primaryPercent, s > 0 {
-            if let c = caseBattery, c > 0 { return "􀛨 \(s)% · Case \(c)%" }
+            if let c = caseBattery, c > 0 { return "􀛨 \(s)% · \(caseLabel) \(c)%" }
             return "􀛨 \(s)%"
         }
         if let c = caseBattery, c > 0 {
-            return "Case \(c)%"
+            return "\(caseLabel) \(c)%"
         }
         return nil
     }

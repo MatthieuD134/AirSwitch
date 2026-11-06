@@ -77,7 +77,7 @@ public final class SleepWakeService {
                 Task { @MainActor in
                     HUDWindowController.shared.show(
                         title: target.name,
-                        subtitle: "Auto-connected on wake",
+                        subtitle: L10n.autoConnectedOnWake,
                         connected: true,
                         battery: battery
                     )

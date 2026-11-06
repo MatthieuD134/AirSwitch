@@ -10,7 +10,7 @@ public struct LowBatteryAlert: Equatable, Sendable {
     }
 
     public var hudSubtitle: String {
-        "Low Battery (\(currentPercent)%)"
+        L10n.lowBattery(currentPercent)
     }
 }
 

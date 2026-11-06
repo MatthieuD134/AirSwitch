@@ -148,7 +148,7 @@ final class OnboardingDeviceRowView: NSView {
             layer?.borderWidth = isFocused ? 2.0 : 1.25
             iconBadgeView.layer?.backgroundColor = Palette.selectedBadgeBg.cgColor
             iconView.contentTintColor = Palette.accentBlue
-            radioIconView.image = NSImage(systemSymbolName: "checkmark.circle.fill", accessibilityDescription: "Selected")
+            radioIconView.image = NSImage(systemSymbolName: "checkmark.circle.fill", accessibilityDescription: L10n.selectedAccessibility)
             radioIconView.contentTintColor = Palette.accentBlue
         } else {
             layer?.backgroundColor = (isHovered || isFocused ? Palette.hoveredBg : Palette.unselectedBg).cgColor
@@ -157,7 +157,7 @@ final class OnboardingDeviceRowView: NSView {
             layer?.borderWidth = isFocused ? 1.75 : 1.25
             iconBadgeView.layer?.backgroundColor = Palette.unselectedBadgeBg.cgColor
             iconView.contentTintColor = Palette.mutedText
-            radioIconView.image = NSImage(systemSymbolName: "circle", accessibilityDescription: "Not selected")
+            radioIconView.image = NSImage(systemSymbolName: "circle", accessibilityDescription: L10n.notSelectedAccessibility)
             radioIconView.contentTintColor = NSColor(white: 1.0, alpha: 0.22)
         }
         setAccessibilityElement(true)
@@ -214,10 +214,10 @@ final class OnboardingDeviceRowView: NSView {
     }
 
     static func statusText(for device: AudioDevice) -> String {
-        guard device.isConnected else { return "Paired" }
+        guard device.isConnected else { return L10n.paired }
         if let battery = device.battery?.displayString, !battery.isEmpty {
-            return "Connected • \(battery)"
+            return "\(L10n.connected) • \(battery)"
         }
-        return "Connected"
+        return L10n.connected
     }
 }

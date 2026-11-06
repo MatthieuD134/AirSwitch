@@ -56,7 +56,7 @@ public final class OnboardingWindowController: NSObject, NSWindowDelegate {
             backing: .buffered,
             defer: false
         )
-        newWindow.title = "Welcome to AirSwitch"
+        newWindow.title = L10n.welcomeToAirSwitch
         newWindow.titleVisibility = .hidden
         newWindow.titlebarAppearsTransparent = true
         newWindow.backgroundColor = NSColor(srgbRed: 0.086, green: 0.086, blue: 0.102, alpha: 1.0)
@@ -75,6 +75,25 @@ public final class OnboardingWindowController: NSObject, NSWindowDelegate {
         newWindow.makeKeyAndOrderFront(nil)
         newWindow.orderFrontRegardless()
         NSApp.activate(ignoringOtherApps: true)
+    }
+
+    public func refreshLocalization() {
+        guard let existingWindow = window else { return }
+        let selectedAddress = onboardingView?.currentConfiguration.selectedDevice?.id ?? Preferences.shared.targetDeviceAddress
+        let devices = BluetoothManager.shared.getPairedAudioDevices()
+        let contentView = OnboardingView(
+            initialDevices: devices,
+            initialTargetAddress: selectedAddress,
+            onRefreshRequested: {
+                BluetoothManager.shared.getPairedAudioDevices()
+            },
+            onComplete: { [weak self] config in
+                self?.applyConfigurationAndClose(config)
+            }
+        )
+        self.onboardingView = contentView
+        existingWindow.title = L10n.welcomeToAirSwitch
+        existingWindow.contentView = contentView
     }
 
     private func applyConfigurationAndClose(_ config: OnboardingView.Configuration) {
@@ -102,7 +121,7 @@ public final class OnboardingWindowController: NSObject, NSWindowDelegate {
             BluetoothConnectionMonitor.shared.seedState(for: selected.id, isConnected: isConnected)
             HUDWindowController.shared.show(
                 title: selected.name,
-                subtitle: "Selected as primary device",
+                subtitle: L10n.selectedAsPrimaryDevice,
                 connected: isConnected,
                 battery: battery
             )
