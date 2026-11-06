@@ -12,6 +12,7 @@ enum AirSwitchDaemon {
 
         _ = StatusBarController.shared
         SleepWakeService.shared.start()
+        BluetoothConnectionMonitor.shared.start()
 
         globalHotKey = HotKey(keyCombo: .defaultToggle) {
             Task { @MainActor in

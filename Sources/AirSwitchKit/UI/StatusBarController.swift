@@ -47,15 +47,32 @@ public final class StatusBarController: NSObject {
     private func startPeriodicUpdates() {
         updateTimer = Timer.scheduledTimer(withTimeInterval: AppConstants.statusPollInterval, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
-                self?.updateUI()
-                ReleaseCheckService.shared.checkInBackgroundIfNeeded()
+                self?.pollStatus()
             }
         }
     }
 
-    public func updateUI() {
-        guard let button = statusItem.button else { return }
+    private func pollStatus() {
+        if let target = BluetoothManager.shared.resolveTargetDevice() {
+            let isConnected = target.device.isConnected()
+            let batteryInfo = isConnected
+                ? BluetoothManager.shared.readBattery(for: target.address, device: target.device)
+                : nil
+            applyStatusItemState(isConnected: isConnected, batteryInfo: batteryInfo)
+            BluetoothConnectionMonitor.shared.handlePeriodicPoll(
+                address: target.address,
+                name: target.name,
+                device: target.device,
+                isConnected: isConnected,
+                battery: batteryInfo
+            )
+        } else {
+            applyStatusItemState(isConnected: false, batteryInfo: nil)
+        }
+        ReleaseCheckService.shared.checkInBackgroundIfNeeded()
+    }
 
+    public func updateUI() {
         var isConnected = false
         var batteryInfo: BatteryInfo?
 
@@ -65,6 +82,12 @@ public final class StatusBarController: NSObject {
                 batteryInfo = BluetoothManager.shared.readBattery(for: target.address, device: target.device)
             }
         }
+
+        applyStatusItemState(isConnected: isConnected, batteryInfo: batteryInfo)
+    }
+
+    private func applyStatusItemState(isConnected: Bool, batteryInfo: BatteryInfo?) {
+        guard let button = statusItem.button else { return }
 
         button.image = menuBarIcon
         button.imagePosition = .imageLeading
@@ -117,6 +140,10 @@ public final class StatusBarController: NSObject {
 
             DispatchQueue.main.asyncAfter(deadline: .now() + AppConstants.toggleSettleDelay) { [weak self] in
                 let actualConnected = dev.isConnected()
+                BluetoothConnectionMonitor.shared.seedState(for: targetAddr, isConnected: actualConnected)
+                if !actualConnected {
+                    LowBatteryMonitor.shared.reset(for: targetAddr)
+                }
                 let resolvedResult = ToggleResult(
                     action: result.action,
                     succeeded: result.action == .connect ? actualConnected : !actualConnected,
@@ -292,6 +319,7 @@ public final class StatusBarController: NSObject {
         let isConnected = device?.isConnected() ?? false
         let battery = isConnected ? BluetoothManager.shared.readBattery(for: addr, device: device) : nil
 
+        BluetoothConnectionMonitor.shared.seedState(for: addr, isConnected: isConnected)
         HUDWindowController.shared.show(
             title: sender.title,
             subtitle: "Selected as primary device",

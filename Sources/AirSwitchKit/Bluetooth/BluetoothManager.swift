@@ -91,6 +91,14 @@ public final class BluetoothManager {
         if device.isConnected() {
             return true
         }
+        let addr = device.addressString ?? ""
+        BluetoothConnectionMonitor.shared.beginAppInitiatedTransition(for: addr)
+        defer {
+            BluetoothConnectionMonitor.shared.endAppInitiatedTransition(
+                for: addr,
+                isConnected: device.isConnected()
+            )
+        }
         return device.openConnection() == kIOReturnSuccess && device.isConnected()
     }
 
@@ -98,6 +106,14 @@ public final class BluetoothManager {
     public func disconnect(device: IOBluetoothDevice) -> Bool {
         if !device.isConnected() {
             return true
+        }
+        let addr = device.addressString ?? ""
+        BluetoothConnectionMonitor.shared.beginAppInitiatedTransition(for: addr)
+        defer {
+            BluetoothConnectionMonitor.shared.endAppInitiatedTransition(
+                for: addr,
+                isConnected: device.isConnected()
+            )
         }
         return device.closeConnection() == kIOReturnSuccess && !device.isConnected()
     }
