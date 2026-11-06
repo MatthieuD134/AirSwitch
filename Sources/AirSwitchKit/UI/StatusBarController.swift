@@ -48,6 +48,7 @@ public final class StatusBarController: NSObject {
         updateTimer = Timer.scheduledTimer(withTimeInterval: AppConstants.statusPollInterval, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 self?.updateUI()
+                ReleaseCheckService.shared.checkInBackgroundIfNeeded()
             }
         }
     }
@@ -241,7 +242,25 @@ public final class StatusBarController: NSObject {
 
         menu.addItem(.separator())
 
-        // 4. Quit
+        // 4. Updates & Quit
+        if let update = ReleaseCheckService.shared.availableUpdate {
+            let installItem = NSMenuItem(
+                title: "Install Update (\(update.tagName))…",
+                action: #selector(installAvailableUpdate),
+                keyEquivalent: ""
+            )
+            installItem.target = self
+            menu.addItem(installItem)
+        } else {
+            let checkUpdatesItem = NSMenuItem(
+                title: "Check for Updates…",
+                action: #selector(checkForUpdatesManually),
+                keyEquivalent: ""
+            )
+            checkUpdatesItem.target = self
+            menu.addItem(checkUpdatesItem)
+        }
+
         let quitItem = NSMenuItem(title: "Quit AirSwitch", action: #selector(quitApp), keyEquivalent: "q")
         quitItem.target = self
         menu.addItem(quitItem)
@@ -299,6 +318,36 @@ public final class StatusBarController: NSObject {
 
     @objc private func toggleLaunchAtLogin() {
         LaunchAtLoginService.toggle()
+    }
+
+    @objc private func installAvailableUpdate() {
+        guard let update = ReleaseCheckService.shared.availableUpdate else { return }
+        AppSelfUpdater.shared.install(update)
+    }
+
+    @objc private func checkForUpdatesManually() {
+        ReleaseCheckService.shared.checkForUpdates { result in
+            switch result {
+            case .success(let update):
+                if let update {
+                    AppSelfUpdater.shared.install(update)
+                } else {
+                    HUDWindowController.shared.show(
+                        title: "AirSwitch v\(AppConstants.version)",
+                        subtitle: "Up to date",
+                        connected: true,
+                        battery: nil
+                    )
+                }
+            case .failure:
+                HUDWindowController.shared.show(
+                    title: AppConstants.appName,
+                    subtitle: "Update Check Failed",
+                    connected: false,
+                    battery: nil
+                )
+            }
+        }
     }
 
     @objc private func quitApp() {

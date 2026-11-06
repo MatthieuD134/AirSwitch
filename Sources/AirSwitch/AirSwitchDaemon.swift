@@ -20,6 +20,7 @@ enum AirSwitchDaemon {
         }
 
         OnboardingWindowController.shared.presentIfNeeded()
+        ReleaseCheckService.shared.checkInBackgroundIfNeeded()
 
         NSLog("[AirSwitch] Daemon started. Hotkey ⌃⌥A registered.")
         app.run()
