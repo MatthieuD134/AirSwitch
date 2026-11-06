@@ -727,6 +727,8 @@ final class AirSwitchTests: XCTestCase {
             XCTAssertFalse(L10n.disconnected.isEmpty)
             XCTAssertFalse(L10n.welcomeToAirSwitch.isEmpty)
             XCTAssertFalse(L10n.quitAirSwitch.isEmpty)
+            XCTAssertTrue(L10n.isTransitioningSubtitle(L10n.checkForUpdates))
+            XCTAssertTrue(L10n.isTransitioningSubtitle(L10n.installUpdate("v0.3.2")))
         }
     }
 }

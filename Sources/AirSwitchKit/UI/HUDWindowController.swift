@@ -99,20 +99,15 @@ public final class HUDWindowController {
         let newPillRect = NSRect(x: shadowPadding, y: shadowPadding, width: targetWidth, height: pillHeight)
 
         if !isAlreadyVisible {
-            if !window.isVisible {
-                window.setFrame(newWindowRect, display: true)
-                window.alphaValue = 0.0
-                if animationsEnabled {
-                    let circleX = shadowPadding + (targetWidth - pillHeight) / 2
-                    pill.frame = NSRect(x: circleX, y: shadowPadding, width: pillHeight, height: pillHeight)
-                } else {
-                    pill.frame = newPillRect
-                }
-                window.orderFront(nil)
-            } else if !animationsEnabled {
-                window.setFrame(newWindowRect, display: true)
+            window.setFrame(newWindowRect, display: true)
+            window.alphaValue = 0.0
+            if animationsEnabled {
+                let circleX = shadowPadding + (targetWidth - pillHeight) / 2
+                pill.frame = NSRect(x: circleX, y: shadowPadding, width: pillHeight, height: pillHeight)
+            } else {
                 pill.frame = newPillRect
             }
+            window.orderFrontRegardless()
         }
 
         NSAnimationContext.runAnimationGroup { context in

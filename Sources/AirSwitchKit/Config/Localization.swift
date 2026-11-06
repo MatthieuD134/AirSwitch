@@ -165,7 +165,10 @@ public enum L10n {
         if lower.contains("connecting") || lower.contains("disconnecting") {
             return true
         }
-        return allTransitioningSubtitles.contains(lower)
+        if allTransitioningSubtitles.contains(lower) {
+            return true
+        }
+        return allInstallUpdatePrefixes.contains { lower.hasPrefix($0) }
     }
 
     public static func isFailureSubtitle(_ subtitle: String) -> Bool {
@@ -193,8 +196,20 @@ public enum L10n {
         for entry in catalog.values {
             set.insert(entry.connecting.lowercased())
             set.insert(entry.disconnecting.lowercased())
+            set.insert(entry.checkForUpdates.lowercased())
         }
         return set
+    }()
+
+    private static let allInstallUpdatePrefixes: [String] = {
+        catalog.values.compactMap { entry in
+            let prefix = entry.installUpdateFormat
+                .components(separatedBy: "(%@)")
+                .first?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .lowercased()
+            return (prefix?.isEmpty == false) ? prefix : nil
+        }
     }()
 
     private static let allFailureSubtitles: Set<String> = {

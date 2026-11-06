@@ -98,8 +98,8 @@ public final class AppSelfUpdater {
 
         isInstalling = true
         HUDWindowController.shared.show(
-            title: "AirSwitch \(release.tagName)",
-            subtitle: L10n.connecting,
+            title: "\(AppConstants.appName) \(release.tagName)",
+            subtitle: L10n.installUpdate(release.tagName),
             connected: true,
             battery: nil
         )
