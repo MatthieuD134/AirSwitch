@@ -36,10 +36,13 @@ curl -fsSL https://raw.githubusercontent.com/MatthieuD134/AirSwitch/main/install
 ### Direct Download (`.dmg`)
 
 1. Download [**AirSwitch.dmg**](https://github.com/MatthieuD134/AirSwitch/releases/latest/download/AirSwitch.dmg) and drag **AirSwitch** to **Applications**.
-2. *(First launch only)* Because the app is ad-hoc signed rather than Apple-notarized, if macOS Gatekeeper prompts you, **Right-click → Open** or run:
-   ```bash
-   xattr -cr /Applications/AirSwitch.app
-   ```
+2. *(First launch only — macOS Gatekeeper)* Because AirSwitch is free and open-source (ad-hoc signed without a paid Apple Developer ID), macOS shows an *"Apple could not verify AirSwitch.app"* prompt when downloaded via a web browser:
+   - **No-CLI (GUI):** Click **Done** on the prompt → open **System Settings → Privacy & Security** → scroll down to **Security** and click **Open Anyway**.
+   - **Or via Terminal:**
+     ```bash
+     xattr -dr com.apple.quarantine /Applications/AirSwitch.app
+     ```
+   *(Subsequent launches and in-app automatic updates will open without any prompt.)*
 
 ---
 

@@ -162,6 +162,7 @@ public final class AppSelfUpdater {
             }
 
             let stagedAppURL = stagingDir.appendingPathComponent("\(AppConstants.appName).app", isDirectory: true)
+            stripQuarantineAttribute(at: stagedAppURL)
             try validateExtractedBundle(at: stagedAppURL)
 
             let backupURL = stagingDir.appendingPathComponent("Backup-\(AppConstants.appName).app", isDirectory: true)
@@ -177,6 +178,20 @@ public final class AppSelfUpdater {
         } catch {
             try? fm.removeItem(at: stagingDir)
             throw error
+        }
+    }
+
+    public nonisolated static func stripQuarantineAttribute(at url: URL) {
+        let xattr = Process()
+        xattr.executableURL = URL(fileURLWithPath: "/usr/bin/xattr")
+        xattr.arguments = ["-dr", "com.apple.quarantine", url.path]
+        xattr.standardOutput = Pipe()
+        xattr.standardError = Pipe()
+        do {
+            try xattr.run()
+            xattr.waitUntilExit()
+        } catch {
+            // Best-effort cleanup
         }
     }
 

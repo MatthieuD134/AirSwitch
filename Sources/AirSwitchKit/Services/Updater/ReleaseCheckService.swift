@@ -138,6 +138,48 @@ public final class ReleaseCheckService {
         )
     }
 
+    public nonisolated static func evaluateRedirectedReleaseURL(
+        _ finalURL: URL,
+        currentVersion: SemanticVersion,
+        repository: String = AppConstants.githubRepository
+    ) throws -> ReleaseInfo? {
+        guard isTrustedGitHubRepositoryURL(finalURL, repository: repository) else {
+            throw ReleaseCheckError.insecureOrInvalidURL
+        }
+
+        let marker = "/releases/tag/"
+        guard let range = finalURL.path.range(of: marker, options: [.caseInsensitive]) else {
+            throw ReleaseCheckError.insecureOrInvalidURL
+        }
+
+        let tagName = String(finalURL.path[range.upperBound...]).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        guard !tagName.isEmpty, !tagName.contains("/") else {
+            throw ReleaseCheckError.insecureOrInvalidURL
+        }
+
+        guard let remoteVersion = SemanticVersion(parsing: tagName) else {
+            throw ReleaseCheckError.invalidVersionString(tagName)
+        }
+
+        guard remoteVersion > currentVersion else {
+            return nil
+        }
+
+        guard let encodedTag = tagName.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed),
+              let zipURL = URL(string: "https://github.com/\(repository)/releases/download/\(encodedTag)/AirSwitch.app.zip"),
+              isTrustedGitHubRepositoryURL(zipURL, repository: repository) else {
+            throw ReleaseCheckError.insecureOrInvalidURL
+        }
+
+        return ReleaseInfo(
+            version: remoteVersion,
+            tagName: tagName,
+            zipDownloadURL: zipURL,
+            htmlURL: finalURL,
+            body: nil
+        )
+    }
+
     public func checkInBackgroundIfNeeded() {
         let now = Date().timeIntervalSince1970
         guard Self.shouldPerformAutomaticCheck(
@@ -188,12 +230,21 @@ public final class ReleaseCheckService {
             Task { @MainActor [weak self] in
                 guard let self else { return }
 
-                let result: Result<ReleaseInfo?, Error>
                 if let error {
-                    result = .failure(error)
-                } else if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
-                    result = .failure(ReleaseCheckError.invalidResponseStatus(http.statusCode))
-                } else if let data {
+                    self.checkViaRedirectFallback(currentVersion: currentVersion, primaryError: error)
+                    return
+                }
+
+                if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+                    self.checkViaRedirectFallback(
+                        currentVersion: currentVersion,
+                        primaryError: ReleaseCheckError.invalidResponseStatus(http.statusCode)
+                    )
+                    return
+                }
+
+                let result: Result<ReleaseInfo?, Error>
+                if let data {
                     do {
                         let update = try Self.evaluateReleasePayload(data, currentVersion: currentVersion)
                         Preferences.shared.lastUpdateCheckTimestamp = Date().timeIntervalSince1970
@@ -206,12 +257,57 @@ public final class ReleaseCheckService {
                     result = .success(nil)
                 }
 
-                let callbacks = self.pendingCompletions
-                self.pendingCompletions.removeAll()
-                for callback in callbacks {
-                    callback(result)
-                }
+                self.completePendingChecks(with: result)
             }
         }.resume()
+    }
+
+    private func checkViaRedirectFallback(
+        currentVersion: SemanticVersion,
+        primaryError: Error
+    ) {
+        guard let fallbackURL = URL(string: "https://github.com/\(AppConstants.githubRepository)/releases/latest") else {
+            completePendingChecks(with: .failure(primaryError))
+            return
+        }
+
+        var request = URLRequest(url: fallbackURL)
+        request.httpMethod = "HEAD"
+        request.setValue("\(AppConstants.appName)/\(AppConstants.version)", forHTTPHeaderField: "User-Agent")
+        request.timeoutInterval = 15
+
+        URLSession.shared.dataTask(with: request) { [weak self] _, response, error in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+
+                let result: Result<ReleaseInfo?, Error>
+                if error != nil {
+                    result = .failure(primaryError)
+                } else if let http = response as? HTTPURLResponse,
+                          (200...299).contains(http.statusCode),
+                          let finalURL = http.url {
+                    do {
+                        let update = try Self.evaluateRedirectedReleaseURL(finalURL, currentVersion: currentVersion)
+                        Preferences.shared.lastUpdateCheckTimestamp = Date().timeIntervalSince1970
+                        self.availableUpdate = update
+                        result = .success(update)
+                    } catch {
+                        result = .failure(primaryError)
+                    }
+                } else {
+                    result = .failure(primaryError)
+                }
+
+                self.completePendingChecks(with: result)
+            }
+        }.resume()
+    }
+
+    private func completePendingChecks(with result: Result<ReleaseInfo?, Error>) {
+        let callbacks = pendingCompletions
+        pendingCompletions.removeAll()
+        for callback in callbacks {
+            callback(result)
+        }
     }
 }

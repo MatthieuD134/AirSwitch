@@ -229,7 +229,24 @@ RELEASE_NOTES_CONTENT="$(render_section_for_range "$TAG" "$TARGET_COMMIT" "$PREV
 
 if [ -n "$RELEASE_NOTES_OUT" ]; then
     mkdir -p "$(dirname "$RELEASE_NOTES_OUT")"
-    printf '%s\n' "$RELEASE_NOTES_CONTENT" > "$RELEASE_NOTES_OUT"
+    {
+        printf '%s\n\n' "$RELEASE_NOTES_CONTENT"
+        cat <<'EOF'
+---
+
+### 📦 Installation & First Launch (macOS Gatekeeper)
+
+- **One-line install (no Gatekeeper prompt):**
+  ```bash
+  curl -fsSL https://raw.githubusercontent.com/MatthieuD134/AirSwitch/main/install.sh | bash
+  ```
+- **Direct `.dmg` download (GUI only, first launch):**
+  1. Drag **AirSwitch.app** to **Applications** and open it.
+  2. When macOS shows *"Apple could not verify AirSwitch.app"*, click **Done**.
+  3. Open **System Settings → Privacy & Security**, scroll down to **Security**, and click **Open Anyway**.
+  *(In-app auto-updates will never trigger this prompt again.)*
+EOF
+    } > "$RELEASE_NOTES_OUT"
 fi
 
 if [ -n "$CHANGELOG_OUT" ]; then

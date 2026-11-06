@@ -311,6 +311,22 @@ final class AirSwitchTests: XCTestCase {
         """.data(using: .utf8)!
 
         XCTAssertThrowsError(try ReleaseCheckService.evaluateReleasePayload(insecureJSON, currentVersion: current))
+
+        // Redirect fallback evaluation (/releases/latest -> /releases/tag/v0.3.0)
+        let redirectedURL = URL(string: "https://github.com/MatthieuD134/AirSwitch/releases/tag/v0.3.0")!
+        let fallbackUpdate = try ReleaseCheckService.evaluateRedirectedReleaseURL(redirectedURL, currentVersion: current)
+        XCTAssertEqual(fallbackUpdate?.version, SemanticVersion(major: 0, minor: 3, patch: 0))
+        XCTAssertEqual(fallbackUpdate?.tagName, "v0.3.0")
+        XCTAssertEqual(
+            fallbackUpdate?.zipDownloadURL.absoluteString,
+            "https://github.com/MatthieuD134/AirSwitch/releases/download/v0.3.0/AirSwitch.app.zip"
+        )
+        XCTAssertNil(
+            try ReleaseCheckService.evaluateRedirectedReleaseURL(
+                redirectedURL,
+                currentVersion: SemanticVersion(major: 0, minor: 3, patch: 0)
+            )
+        )
     }
 
     func testReleaseCheckServiceAutomaticCheckSchedule() {
