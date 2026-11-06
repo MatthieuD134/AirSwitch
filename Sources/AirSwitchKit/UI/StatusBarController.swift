@@ -253,10 +253,15 @@ public final class StatusBarController: NSObject {
         Preferences.shared.setTargetDevice(address: addr, name: sender.title)
         updateUI()
 
+        let device = BluetoothManager.shared.findDevice(by: addr)
+        let isConnected = device?.isConnected() ?? false
+        let battery = isConnected ? BluetoothManager.shared.readBattery(for: addr, device: device) : nil
+
         HUDWindowController.shared.show(
             title: sender.title,
             subtitle: "Selected as primary device",
-            connected: false
+            connected: isConnected,
+            battery: battery
         )
     }
 
