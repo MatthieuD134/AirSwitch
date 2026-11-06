@@ -91,7 +91,7 @@ public final class BluetoothManager {
         if device.isConnected() {
             return true
         }
-        return device.openConnection() == kIOReturnSuccess
+        return device.openConnection() == kIOReturnSuccess && device.isConnected()
     }
 
     @discardableResult
@@ -99,17 +99,17 @@ public final class BluetoothManager {
         if !device.isConnected() {
             return true
         }
-        return device.closeConnection() == kIOReturnSuccess
+        return device.closeConnection() == kIOReturnSuccess && !device.isConnected()
     }
 
-    public func toggle(device: IOBluetoothDevice) -> Bool {
-        if device.isConnected() {
-            _ = disconnect(device: device)
-            return false
-        } else {
-            _ = connect(device: device)
-            return true
-        }
+    public func toggle(device: IOBluetoothDevice) -> ToggleResult {
+        let wasConnected = device.isConnected()
+        let transportSucceeded = wasConnected ? disconnect(device: device) : connect(device: device)
+        return ToggleResult.evaluate(
+            wasConnected: wasConnected,
+            transportSucceeded: transportSucceeded,
+            isConnectedNow: device.isConnected()
+        )
     }
 
     public func readBattery(for address: String, device: IOBluetoothDevice? = nil) -> BatteryInfo? {

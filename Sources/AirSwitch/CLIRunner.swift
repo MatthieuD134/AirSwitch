@@ -101,8 +101,13 @@ enum CLIRunner {
         }
         let wasConnected = target.device.isConnected()
         print("Toggling \(target.name) (currently \(wasConnected ? "connected" : "disconnected"))...")
-        let newState = BluetoothManager.shared.toggle(device: target.device)
-        print(newState ? "Now CONNECTED." : "Now DISCONNECTED.")
+        let result = BluetoothManager.shared.toggle(device: target.device)
+        if result.succeeded {
+            print(result.isConnected ? "Now CONNECTED." : "Now DISCONNECTED.")
+        } else {
+            print("Error: \(result.hudSubtitle).")
+            exit(1)
+        }
     }
 
     private static func selectTargetDevice(matching query: String) {
