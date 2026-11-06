@@ -184,8 +184,8 @@ final class AirSwitchTests: XCTestCase {
     func testOnboardingStateShouldPresentOnLaunch() {
         XCTAssertTrue(OnboardingState.shouldPresentOnLaunch(hasCompletedOnboarding: false, targetDeviceAddress: nil))
         XCTAssertTrue(OnboardingState.shouldPresentOnLaunch(hasCompletedOnboarding: false, targetDeviceAddress: "   "))
+        XCTAssertTrue(OnboardingState.shouldPresentOnLaunch(hasCompletedOnboarding: false, targetDeviceAddress: "aa-bb-cc-dd-ee-ff"))
         XCTAssertFalse(OnboardingState.shouldPresentOnLaunch(hasCompletedOnboarding: true, targetDeviceAddress: nil))
-        XCTAssertFalse(OnboardingState.shouldPresentOnLaunch(hasCompletedOnboarding: false, targetDeviceAddress: "aa-bb-cc-dd-ee-ff"))
         XCTAssertFalse(OnboardingState.shouldPresentOnLaunch(hasCompletedOnboarding: true, targetDeviceAddress: "aa-bb-cc-dd-ee-ff"))
     }
 

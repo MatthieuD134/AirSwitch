@@ -121,7 +121,8 @@ install: build
 uninstall: stop
 	@rm -f $(INSTALL_DIR)/$(BIN_NAME)
 	@rm -rf $(APPLICATIONS_DIR)/$(APP_NAME)
-	@echo "Uninstalled $(BIN_NAME) and $(APP_NAME)"
+	@defaults delete io.github.airswitch 2>/dev/null || true
+	@echo "Uninstalled $(BIN_NAME), $(APP_NAME), and cleared preferences"
 
 run: install
 	@nohup $(INSTALL_DIR)/$(BIN_NAME) >/dev/null 2>&1 &

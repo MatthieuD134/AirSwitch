@@ -27,14 +27,11 @@ public final class OnboardingWindowController: NSObject, NSWindowDelegate {
         let devices = BluetoothManager.shared.getPairedAudioDevices()
 
         if let existingWindow = window {
-            onboardingView?.syncOptions(
-                autoConnectOnWake: prefs.autoConnectOnWake,
-                autoDisconnectOnSleep: prefs.autoDisconnectOnSleep,
-                launchAtLogin: LaunchAtLoginService.isEnabled
-            )
             onboardingView?.updateDevices(devices, preferredTargetAddress: prefs.targetDeviceAddress)
+            NSApp.setActivationPolicy(.regular)
             existingWindow.center()
             existingWindow.makeKeyAndOrderFront(nil)
+            existingWindow.orderFrontRegardless()
             NSApp.activate(ignoringOtherApps: true)
             return
         }
@@ -42,9 +39,6 @@ public final class OnboardingWindowController: NSObject, NSWindowDelegate {
         let contentView = OnboardingView(
             initialDevices: devices,
             initialTargetAddress: prefs.targetDeviceAddress,
-            autoConnectOnWake: prefs.autoConnectOnWake,
-            autoDisconnectOnSleep: prefs.autoDisconnectOnSleep,
-            launchAtLogin: LaunchAtLoginService.isEnabled,
             onRefreshRequested: {
                 BluetoothManager.shared.getPairedAudioDevices()
             },
@@ -55,7 +49,7 @@ public final class OnboardingWindowController: NSObject, NSWindowDelegate {
         self.onboardingView = contentView
 
         let newWindow = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 440, height: 490),
+            contentRect: NSRect(x: 0, y: 0, width: 410, height: 390),
             styleMask: [.titled, .closable, .fullSizeContentView],
             backing: .buffered,
             defer: false
@@ -63,24 +57,27 @@ public final class OnboardingWindowController: NSObject, NSWindowDelegate {
         newWindow.title = "Welcome to AirSwitch"
         newWindow.titleVisibility = .hidden
         newWindow.titlebarAppearsTransparent = true
+        newWindow.backgroundColor = NSColor(srgbRed: 0.086, green: 0.086, blue: 0.102, alpha: 1.0)
+        newWindow.isOpaque = false
+        newWindow.hasShadow = true
         newWindow.isMovableByWindowBackground = true
         newWindow.isReleasedWhenClosed = false
         newWindow.level = .floating
+        newWindow.appearance = NSAppearance(named: .darkAqua)
         newWindow.contentView = contentView
         newWindow.delegate = self
         newWindow.center()
 
         self.window = newWindow
+        NSApp.setActivationPolicy(.regular)
         newWindow.makeKeyAndOrderFront(nil)
+        newWindow.orderFrontRegardless()
         NSApp.activate(ignoringOtherApps: true)
     }
 
     private func applyConfigurationAndClose(_ config: OnboardingView.Configuration) {
         let prefs = Preferences.shared
-        prefs.autoConnectOnWake = config.autoConnectOnWake
-        prefs.autoDisconnectOnSleep = config.autoDisconnectOnSleep
         prefs.hasCompletedOnboarding = true
-        LaunchAtLoginService.setEnabled(config.launchAtLogin)
 
         if let selected = config.selectedDevice {
             prefs.setTargetDevice(address: selected.id, name: selected.name)
@@ -108,5 +105,6 @@ public final class OnboardingWindowController: NSObject, NSWindowDelegate {
         Preferences.shared.hasCompletedOnboarding = true
         onboardingView = nil
         window = nil
+        NSApp.setActivationPolicy(.accessory)
     }
 }

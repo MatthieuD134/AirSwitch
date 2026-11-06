@@ -3,11 +3,8 @@ import Foundation
 import AirSwitchKit
 
 @MainActor
-enum AirSwitchDaemon {
-    static func run() {
-        let app = NSApplication.shared
-        app.setActivationPolicy(.accessory) // No dock icon, menu bar only
-
+private final class AirSwitchAppDelegate: NSObject, NSApplicationDelegate {
+    func applicationDidFinishLaunching(_ notification: Notification) {
         _ = StatusBarController.shared
         SleepWakeService.shared.start()
         BluetoothConnectionMonitor.shared.start()
@@ -26,6 +23,17 @@ enum AirSwitchDaemon {
         } else {
             NSLog("[AirSwitch] Daemon started. Warning: failed to register global hotkey.")
         }
+    }
+}
+
+@MainActor
+enum AirSwitchDaemon {
+    private static let appDelegate = AirSwitchAppDelegate()
+
+    static func run() {
+        let app = NSApplication.shared
+        app.setActivationPolicy(.accessory) // No dock icon by default; onboarding switches temporarily if needed
+        app.delegate = appDelegate
         app.run()
     }
 }
