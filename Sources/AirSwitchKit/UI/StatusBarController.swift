@@ -115,11 +115,7 @@ public final class StatusBarController: NSObject {
 
     public func toggleConnection() {
         guard let target = BluetoothManager.shared.resolveTargetDevice() else {
-            if Preferences.shared.targetDeviceAddress == nil {
-                OnboardingWindowController.shared.show()
-            } else {
-                showMenu()
-            }
+            showMenu()
             return
         }
 
@@ -226,14 +222,6 @@ public final class StatusBarController: NSObject {
         devicesItem.submenu = devicesSubmenu
         menu.addItem(devicesItem)
 
-        let setupDeviceItem = NSMenuItem(
-            title: "Setup Primary Device…",
-            action: #selector(openOnboarding),
-            keyEquivalent: ""
-        )
-        setupDeviceItem.target = self
-        menu.addItem(setupDeviceItem)
-
         let shortcutItem = NSMenuItem(
             title: "Global Shortcut (\(HotKeyService.shared.currentKeyCombo.displayString))…",
             action: #selector(openShortcutRecorder),
@@ -313,10 +301,6 @@ public final class StatusBarController: NSObject {
 
     @objc private func menuToggle() {
         toggleConnection()
-    }
-
-    @objc private func openOnboarding() {
-        OnboardingWindowController.shared.show()
     }
 
     @objc private func openShortcutRecorder() {

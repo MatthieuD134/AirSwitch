@@ -2,13 +2,13 @@ import Foundation
 
 public enum OnboardingState {
     /// Determines whether the first-launch onboarding window should automatically appear.
-    /// Existing users who already have a saved `targetDeviceAddress` are not interrupted.
+    /// Shown once on the very first launch (`!hasCompletedOnboarding`).
     public static func shouldPresentOnLaunch(
         hasCompletedOnboarding: Bool,
-        targetDeviceAddress: String?
+        targetDeviceAddress: String? = nil
     ) -> Bool {
-        let normalizedTarget = targetDeviceAddress?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        return !hasCompletedOnboarding && normalizedTarget.isEmpty
+        _ = targetDeviceAddress
+        return !hasCompletedOnboarding
     }
 
     /// Selects the best default device ID to pre-highlight in the onboarding device list.
