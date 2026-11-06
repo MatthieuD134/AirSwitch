@@ -14,25 +14,32 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Sync version from git tag
+      - name: Validate release tag and sync version
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          make set-version VERSION="$VERSION"
+          if ! [[ "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            printf 'Invalid release tag: %s\n' "$GITHUB_REF_NAME" >&2
+            exit 1
+          fi
+          VERSION="${GITHUB_REF_NAME#v}" make set-version
 
       - name: Run unit tests
         run: make test
 
-      - name: Build DMG and ZIP artifacts
+      - name: Build DMG, ZIP, and Changelog artifacts
         run: |
           make dmg
           ditto -c -k --sequesterRsrc --keepParent build/AirSwitch.app build/AirSwitch.app.zip
+          TAG="$GITHUB_REF_NAME" make changelog
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          generate_release_notes: true
+          body_path: build/RELEASE_NOTES.md
           prerelease: ${{ contains(github.ref_name, '-') }}
           files: |
             build/AirSwitch.dmg
             build/AirSwitch.app.zip
+            build/CHANGELOG.md
