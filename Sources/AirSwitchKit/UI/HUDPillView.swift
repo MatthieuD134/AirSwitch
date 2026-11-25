@@ -95,6 +95,7 @@ final class HUDPillView: NSView {
         stack.addArrangedSubview(batteryLabel)
 
         let widthConstraint = stack.widthAnchor.constraint(equalToConstant: Self.initialWidth)
+        widthConstraint.priority = .defaultHigh
         self.stackWidthConstraint = widthConstraint
 
         if let glassClass = NSClassFromString("NSGlassEffectView") as? NSView.Type {
@@ -107,12 +108,13 @@ final class HUDPillView: NSView {
             glassView.autoresizingMask = [.width, .height]
 
             let contentHolder = NSView(frame: bounds)
-            contentHolder.translatesAutoresizingMaskIntoConstraints = false
+            contentHolder.autoresizingMask = [.width, .height]
             contentHolder.addSubview(stack)
             (glassView as AnyObject).setValue(contentHolder, forKey: "contentView")
 
             NSLayoutConstraint.activate([
                 stack.leadingAnchor.constraint(equalTo: contentHolder.leadingAnchor),
+                stack.trailingAnchor.constraint(equalTo: contentHolder.trailingAnchor),
                 widthConstraint,
                 stack.topAnchor.constraint(equalTo: contentHolder.topAnchor),
                 stack.bottomAnchor.constraint(equalTo: contentHolder.bottomAnchor)
@@ -135,6 +137,7 @@ final class HUDPillView: NSView {
             visualEffect.addSubview(stack)
             NSLayoutConstraint.activate([
                 stack.leadingAnchor.constraint(equalTo: visualEffect.leadingAnchor),
+                stack.trailingAnchor.constraint(equalTo: visualEffect.trailingAnchor),
                 widthConstraint,
                 stack.topAnchor.constraint(equalTo: visualEffect.topAnchor),
                 stack.bottomAnchor.constraint(equalTo: visualEffect.bottomAnchor)

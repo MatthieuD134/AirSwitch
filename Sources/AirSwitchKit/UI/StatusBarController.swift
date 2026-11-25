@@ -8,6 +8,7 @@ public final class StatusBarController: NSObject {
 
     private var statusItem: NSStatusItem!
     private var updateTimer: Timer?
+    private var isToggleInFlight = false
 
     private lazy var menuBarIcon: NSImage? = {
         let urls = [
@@ -45,14 +46,17 @@ public final class StatusBarController: NSObject {
     }
 
     private func startPeriodicUpdates() {
-        updateTimer = Timer.scheduledTimer(withTimeInterval: AppConstants.statusPollInterval, repeats: true) { [weak self] _ in
+        let timer = Timer(timeInterval: AppConstants.statusPollInterval, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 self?.pollStatus()
             }
         }
+        RunLoop.main.add(timer, forMode: .common)
+        updateTimer = timer
     }
 
     private func pollStatus() {
+        guard !isToggleInFlight else { return }
         if let target = BluetoothManager.shared.resolveTargetDevice() {
             let isConnected = target.device.isConnected()
             let batteryInfo = isConnected
@@ -114,11 +118,13 @@ public final class StatusBarController: NSObject {
     }
 
     public func toggleConnection() {
+        guard !isToggleInFlight else { return }
         guard let target = BluetoothManager.shared.resolveTargetDevice() else {
             showMenu()
             return
         }
 
+        isToggleInFlight = true
         let targetAddr = target.address
         let targetName = target.name
         let willConnect = !target.device.isConnected()
@@ -130,8 +136,21 @@ public final class StatusBarController: NSObject {
             battery: nil
         )
 
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let dev = BluetoothManager.shared.findDevice(by: targetAddr) else { return }
+        BluetoothManager.shared.operationQueue.async { [weak self] in
+            guard let dev = BluetoothManager.shared.findDevice(by: targetAddr) else {
+                Task { @MainActor [weak self] in
+                    self?.isToggleInFlight = false
+                    self?.updateUI()
+                    HUDWindowController.shared.show(
+                        title: targetName,
+                        subtitle: willConnect ? L10n.connectionFailed : L10n.disconnectionFailed,
+                        connected: !willConnect,
+                        battery: nil
+                    )
+                }
+                return
+            }
+
             let result = BluetoothManager.shared.toggle(device: dev)
 
             DispatchQueue.main.asyncAfter(deadline: .now() + AppConstants.toggleSettleDelay) { [weak self] in
@@ -146,6 +165,7 @@ public final class StatusBarController: NSObject {
                     isConnected: actualConnected
                 )
                 let battery = actualConnected ? BluetoothManager.shared.readBattery(for: targetAddr, device: dev) : nil
+                self?.isToggleInFlight = false
                 self?.updateUI()
                 HUDWindowController.shared.show(
                     title: targetName,

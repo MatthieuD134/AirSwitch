@@ -72,19 +72,50 @@ final class AirSwitchTests: XCTestCase {
 
     @MainActor
     func testHUDShowAndDismissCycle() {
-        HUDWindowController.shared.show(
+        let controller = HUDWindowController.shared
+        let padding = controller.shadowPadding
+
+        controller.show(
             title: "AirPods Pro",
             subtitle: "Connecting...",
             connected: true,
             battery: nil
         )
-        HUDWindowController.shared.show(
+        if let window = controller.window, let pill = controller.pillView, NSScreen.main ?? NSScreen.screens.first != nil {
+            XCTAssertEqual(pill.frame.origin.x, padding)
+            XCTAssertEqual(pill.frame.origin.y, padding)
+            XCTAssertEqual(window.frame.width, pill.frame.width + padding * 2)
+        }
+
+        controller.show(
             title: "AirPods Pro",
             subtitle: "Connected",
             connected: true,
             battery: BatteryInfo(single: nil, left: 90, right: 85, caseBattery: 100)
         )
-        HUDWindowController.shared.dismiss()
+        if let window = controller.window, let pill = controller.pillView, NSScreen.main ?? NSScreen.screens.first != nil {
+            XCTAssertEqual(pill.frame.origin.x, padding)
+            XCTAssertEqual(window.frame.width, pill.frame.width + padding * 2)
+        }
+
+        controller.dismiss()
+
+        // Subsequent Disconnected HUD after dismiss must remain centered with full pill width
+        controller.show(
+            title: "AirPods Pro",
+            subtitle: "Disconnected",
+            connected: false,
+            battery: nil
+        )
+        if let window = controller.window, let pill = controller.pillView, NSScreen.main ?? NSScreen.screens.first != nil {
+            XCTAssertEqual(pill.frame.origin.x, padding)
+            XCTAssertEqual(pill.frame.width, 175)
+            XCTAssertEqual(window.frame.width, 175 + padding * 2)
+        }
+
+        controller.dismissImmediate()
+        XCTAssertEqual(controller.window?.alphaValue, 0.0)
+        XCTAssertFalse(controller.window?.isVisible ?? true)
     }
 
     func testToggleResultEvaluationAndSubtitles() {
@@ -462,6 +493,23 @@ final class AirSwitchTests: XCTestCase {
         let genBefore = monitor.currentGeneration(for: target)
         monitor.invalidatePendingConnectionHUD(for: target)
         XCTAssertNotEqual(monitor.currentGeneration(for: target), genBefore)
+
+        // Disconnect occurring while system is sleeping updates baseline without emitting a spurious .disconnected HUD
+        let tSleep = t0.addingTimeInterval(30)
+        monitor.handleWillSleep()
+        XCTAssertNil(
+            monitor.recordObservedState(address: target, isConnected: false, targetAddress: target, now: tSleep)
+        )
+        monitor.endSleepCycle()
+        // Post-wake observation of already-disconnected device emits no duplicate .disconnected event
+        XCTAssertNil(
+            monitor.recordObservedState(address: target, isConnected: false, targetAddress: target, now: tSleep.addingTimeInterval(2))
+        )
+        // Subsequent external reconnect after wake still emits .connected normally
+        XCTAssertEqual(
+            monitor.recordObservedState(address: target, isConnected: true, targetAddress: target, now: tSleep.addingTimeInterval(4)),
+            .connected
+        )
     }
 
     func testKeyComboFormattingValidationAndCodable() throws {
