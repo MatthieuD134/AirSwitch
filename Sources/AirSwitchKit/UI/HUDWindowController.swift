@@ -5,11 +5,12 @@ import Foundation
 public final class HUDWindowController {
     public static let shared = HUDWindowController()
 
-    private var window: NSPanel?
-    private var pillView: HUDPillView?
+    internal private(set) var window: NSPanel?
+    internal private(set) var pillView: HUDPillView?
     private var dismissTimer: Timer?
+    private var dismissGeneration: UInt64 = 0
 
-    private let shadowPadding: CGFloat = 16
+    internal let shadowPadding: CGFloat = 16
 
     private var animationsEnabled: Bool {
         Preferences.shared.hudAnimations && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
@@ -41,6 +42,7 @@ public final class HUDWindowController {
 
         let rootContentView = NSView(frame: panel.contentView?.bounds ?? .zero)
         rootContentView.wantsLayer = true
+        rootContentView.autoresizingMask = [.width, .height]
 
         let pill = HUDPillView(origin: CGPoint(x: shadowPadding, y: shadowPadding))
         rootContentView.addSubview(pill)
@@ -58,6 +60,10 @@ public final class HUDWindowController {
     ) {
         guard Preferences.shared.showHUD else { return }
         guard let window, let pill = pillView else { return }
+        guard let screen = NSScreen.main ?? NSScreen.screens.first else {
+            dismissImmediate()
+            return
+        }
 
         let resolved = Self.resolveDisplayContent(
             title: title,
@@ -68,10 +74,11 @@ public final class HUDWindowController {
         let isTransitioning = resolved.isTransitioning
         let displayLabelText = resolved.statusText
         let batteryText = resolved.batteryText
-        let isAlreadyVisible = dismissTimer != nil
+        let isAlreadyVisible = window.isVisible && window.alphaValue > 0 && dismissTimer != nil
 
         dismissTimer?.invalidate()
         dismissTimer = nil
+        dismissGeneration &+= 1
 
         pill.configureIcon(forDeviceTitle: title)
         pill.setPulseAnimation(active: animationsEnabled && isTransitioning)
@@ -88,7 +95,6 @@ public final class HUDWindowController {
             crossFade: isAlreadyVisible
         )
 
-        guard let screen = NSScreen.main else { return }
         let pillHeight = HUDPillView.pillHeight
         let totalWidth = targetWidth + (shadowPadding * 2)
         let totalHeight = pillHeight + (shadowPadding * 2)
@@ -98,61 +104,56 @@ public final class HUDWindowController {
         let newWindowRect = NSRect(x: targetX, y: targetY, width: totalWidth, height: totalHeight)
         let newPillRect = NSRect(x: shadowPadding, y: shadowPadding, width: targetWidth, height: pillHeight)
 
-        if !isAlreadyVisible {
-            window.setFrame(newWindowRect, display: true)
-            window.alphaValue = 0.0
-            if animationsEnabled {
-                let circleX = shadowPadding + (targetWidth - pillHeight) / 2
-                pill.frame = NSRect(x: circleX, y: shadowPadding, width: pillHeight, height: pillHeight)
-            } else {
-                pill.frame = newPillRect
+        window.setFrame(newWindowRect, display: true)
+        window.contentView?.frame = NSRect(x: 0, y: 0, width: totalWidth, height: totalHeight)
+        pill.frame = newPillRect
+        pill.needsLayout = true
+        pill.layoutSubtreeIfNeeded()
+        pill.updateShadowPath(width: targetWidth)
+
+        if connected {
+            pill.statusDot.fillColor = .systemGreen
+            if isAlreadyVisible && animationsEnabled {
+                pill.triggerConnectedBounce()
             }
+            if batteryText != nil {
+                pill.batteryLabel.isHidden = false
+                pill.batteryLabel.alphaValue = 1.0
+            } else {
+                pill.batteryLabel.isHidden = true
+                pill.batteryLabel.alphaValue = 0.0
+            }
+        } else {
+            pill.statusDot.fillColor = .systemGray
+            pill.batteryLabel.isHidden = true
+            pill.batteryLabel.alphaValue = 0.0
+        }
+
+        if !isAlreadyVisible {
+            window.alphaValue = animationsEnabled ? 0.0 : 1.0
             window.orderFrontRegardless()
         }
 
-        NSAnimationContext.runAnimationGroup { context in
-            context.duration = isAlreadyVisible ? 0.30 : (animationsEnabled ? 0.24 : 0.18)
-            context.timingFunction = CAMediaTimingFunction(controlPoints: 0.22, 1.0, 0.36, 1.0)
-            context.allowsImplicitAnimation = true
-            window.animator().alphaValue = 1.0
-
-            if animationsEnabled {
-                if isAlreadyVisible {
-                    window.animator().setFrame(newWindowRect, display: true)
-                }
-                pill.animator().frame = newPillRect
-            } else if isAlreadyVisible {
-                window.setFrame(newWindowRect, display: true)
-                pill.frame = newPillRect
-            }
-
-            pill.updateShadowPath(width: targetWidth)
-
-            if connected {
-                pill.statusDot.fillColor = .systemGreen
-                if isAlreadyVisible && animationsEnabled {
-                    pill.triggerConnectedBounce()
-                }
-                if batteryText != nil {
-                    pill.batteryLabel.isHidden = false
-                    pill.batteryLabel.animator().alphaValue = 1.0
-                } else {
-                    pill.batteryLabel.isHidden = true
-                    pill.batteryLabel.alphaValue = 0.0
-                }
-            } else {
-                pill.statusDot.fillColor = .systemGray
-                pill.batteryLabel.isHidden = true
-                pill.batteryLabel.alphaValue = 0.0
+        if isAlreadyVisible || !animationsEnabled {
+            window.alphaValue = 1.0
+        } else {
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 0.20
+                context.timingFunction = CAMediaTimingFunction(controlPoints: 0.22, 1.0, 0.36, 1.0)
+                window.animator().alphaValue = 1.0
             }
         }
 
         let dismissDelay = isTransitioning ? 12.0 : 1.8
-        dismissTimer = Timer.scheduledTimer(withTimeInterval: dismissDelay, repeats: false) { [weak self] _ in
+        let expectedGeneration = dismissGeneration
+        let timer = Timer(timeInterval: dismissDelay, repeats: false) { [weak self] _ in
             Task { @MainActor [weak self] in
-                self?.dismiss()
+                guard let self, self.dismissGeneration == expectedGeneration else { return }
+                self.dismiss()
             }
         }
+        RunLoop.main.add(timer, forMode: .common)
+        dismissTimer = timer
     }
 
     public static func resolveDisplayContent(
@@ -195,25 +196,37 @@ public final class HUDWindowController {
         return trimmed
     }
 
+    public func dismissImmediate() {
+        dismissTimer?.invalidate()
+        dismissTimer = nil
+        dismissGeneration &+= 1
+        pillView?.setPulseAnimation(active: false)
+        guard let window else { return }
+        window.alphaValue = 0.0
+        window.orderOut(nil)
+    }
+
     public func dismiss() {
         dismissTimer?.invalidate()
         dismissTimer = nil
-        guard let window, window.isVisible, window.alphaValue > 0 else { return }
-        let pillHeight = HUDPillView.pillHeight
+        guard let window else { return }
+        guard window.isVisible && window.alphaValue > 0 && animationsEnabled else {
+            dismissImmediate()
+            return
+        }
+
+        dismissGeneration &+= 1
+        let expectedGeneration = dismissGeneration
 
         NSAnimationContext.runAnimationGroup({ context in
-            context.duration = 0.22
+            context.duration = 0.18
             context.timingFunction = CAMediaTimingFunction(controlPoints: 0.4, 0.0, 1.0, 1.0)
-            context.allowsImplicitAnimation = true
             window.animator().alphaValue = 0.0
-            if animationsEnabled, let pill = self.pillView {
-                let circleX = (window.frame.width - pillHeight) / 2
-                pill.animator().frame = NSRect(x: circleX, y: shadowPadding, width: pillHeight, height: pillHeight)
-            }
         }, completionHandler: { [weak self] in
             Task { @MainActor [weak self] in
-                guard let self, self.dismissTimer == nil else { return }
-                window.orderOut(nil)
+                guard let self, self.dismissGeneration == expectedGeneration else { return }
+                self.window?.alphaValue = 0.0
+                self.window?.orderOut(nil)
             }
         })
     }

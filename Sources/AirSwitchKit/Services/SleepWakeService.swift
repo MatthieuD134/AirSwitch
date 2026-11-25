@@ -2,10 +2,13 @@ import AppKit
 import Foundation
 @preconcurrency import IOBluetooth
 
+@MainActor
 public final class SleepWakeService {
     public static let shared = SleepWakeService()
 
     private var observers: [NSObjectProtocol] = []
+    private var wakeWorkItem: DispatchWorkItem?
+    private var wakeGeneration: UInt64 = 0
 
     private init() {}
 
@@ -19,7 +22,9 @@ public final class SleepWakeService {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            self?.handleWillSleep()
+            Task { @MainActor [weak self] in
+                self?.handleWillSleep()
+            }
         }
         observers.append(sleepObs)
 
@@ -28,7 +33,9 @@ public final class SleepWakeService {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            self?.handleDidWake()
+            Task { @MainActor [weak self] in
+                self?.handleDidWake()
+            }
         }
         observers.append(wakeObs)
 
@@ -36,6 +43,9 @@ public final class SleepWakeService {
     }
 
     public func stop() {
+        wakeGeneration &+= 1
+        wakeWorkItem?.cancel()
+        wakeWorkItem = nil
         for obs in observers {
             NSWorkspace.shared.notificationCenter.removeObserver(obs)
         }
@@ -43,44 +53,102 @@ public final class SleepWakeService {
     }
 
     private func handleWillSleep() {
+        wakeGeneration &+= 1
+        wakeWorkItem?.cancel()
+        wakeWorkItem = nil
+
+        BluetoothConnectionMonitor.shared.handleWillSleep()
+        HUDWindowController.shared.dismissImmediate()
+
         guard Preferences.shared.autoDisconnectOnSleep,
-              let target = BluetoothManager.shared.resolveTargetDevice() else {
+              let target = BluetoothManager.shared.resolveTargetDevice(),
+              target.device.isConnected() else {
             return
         }
 
-        if target.device.isConnected() {
-            NSLog("[AirSwitch] Mac sleeping -> disconnecting \(target.name) to release to phone.")
-            _ = BluetoothManager.shared.disconnect(device: target.device)
+        let targetAddr = target.address
+        let targetName = target.name
+        let device = target.device
+        NSLog("[AirSwitch] Mac sleeping -> disconnecting \(targetName) to release to phone.")
+        BluetoothConnectionMonitor.shared.seedState(for: targetAddr, isConnected: false)
+        BluetoothManager.shared.operationQueue.async {
+            _ = BluetoothManager.shared.disconnect(device: device)
         }
     }
 
     private func handleDidWake() {
+        wakeGeneration &+= 1
+        wakeWorkItem?.cancel()
+        wakeWorkItem = nil
+
+        BluetoothConnectionMonitor.shared.handleDidWake()
+        StatusBarController.shared.updateUI()
+
         guard Preferences.shared.autoConnectOnWake,
               Preferences.shared.targetDeviceAddress != nil else {
             return
         }
 
+        let expectedGeneration = wakeGeneration
         NSLog("[AirSwitch] Mac woke up -> scheduling auto-connect to target device in \(AppConstants.wakeAutoConnectDelay)s...")
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + AppConstants.wakeAutoConnectDelay) {
-            guard let target = BluetoothManager.shared.resolveTargetDevice(),
-                  !target.device.isConnected() else {
-                return
+        let item = DispatchWorkItem { [weak self] in
+            Task { @MainActor [weak self] in
+                guard let self, self.wakeGeneration == expectedGeneration else { return }
+                self.performWakeAutoConnect(expectedGeneration: expectedGeneration, remainingRetries: 1)
             }
+        }
+        wakeWorkItem = item
+        DispatchQueue.main.asyncAfter(deadline: .now() + AppConstants.wakeAutoConnectDelay, execute: item)
+    }
 
-            NSLog("[AirSwitch] Attempting wake auto-connect to \(target.name)...")
-            guard BluetoothManager.shared.connect(device: target.device) else { return }
+    private func performWakeAutoConnect(expectedGeneration: UInt64, remainingRetries: Int) {
+        guard wakeGeneration == expectedGeneration,
+              let target = BluetoothManager.shared.resolveTargetDevice(),
+              !target.device.isConnected() else {
+            return
+        }
 
-            NSLog("[AirSwitch] Successfully auto-connected on wake!")
-            DispatchQueue.main.asyncAfter(deadline: .now() + AppConstants.wakeBatteryReadDelay) {
-                let battery = BluetoothManager.shared.readBattery(for: target.address, device: target.device)
-                Task { @MainActor in
-                    HUDWindowController.shared.show(
-                        title: target.name,
-                        subtitle: L10n.autoConnectedOnWake,
-                        connected: true,
-                        battery: battery
-                    )
+        let targetName = target.name
+        let device = target.device
+        NSLog("[AirSwitch] Attempting wake auto-connect to \(targetName)...")
+
+        BluetoothManager.shared.operationQueue.async { [weak self] in
+            let connected = BluetoothManager.shared.connect(device: device)
+            Task { @MainActor [weak self] in
+                guard let self, self.wakeGeneration == expectedGeneration else { return }
+                if connected {
+                    NSLog("[AirSwitch] Successfully auto-connected on wake!")
+                    StatusBarController.shared.updateUI()
+                    DispatchQueue.main.asyncAfter(deadline: .now() + AppConstants.wakeBatteryReadDelay) { [weak self] in
+                        Task { @MainActor [weak self] in
+                            guard let self, self.wakeGeneration == expectedGeneration,
+                                  let refreshed = BluetoothManager.shared.resolveTargetDevice(),
+                                  refreshed.device.isConnected() else {
+                                return
+                            }
+                            let battery = BluetoothManager.shared.readBattery(
+                                for: refreshed.address,
+                                device: refreshed.device
+                            )
+                            StatusBarController.shared.updateUI()
+                            HUDWindowController.shared.show(
+                                title: refreshed.name,
+                                subtitle: L10n.autoConnectedOnWake,
+                                connected: true,
+                                battery: battery
+                            )
+                        }
+                    }
+                } else if remainingRetries > 0 {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
+                        Task { @MainActor [weak self] in
+                            self?.performWakeAutoConnect(
+                                expectedGeneration: expectedGeneration,
+                                remainingRetries: remainingRetries - 1
+                            )
+                        }
+                    }
                 }
             }
         }

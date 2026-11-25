@@ -17,6 +17,7 @@ public final class BluetoothConnectionMonitor: NSObject, @unchecked Sendable {
     private var activeAppTransitionCountByAddress: [String: Int] = [:]
     private var suppressionDeadlineByAddress: [String: Date] = [:]
     private var transitionGenerationByAddress: [String: UInt64] = [:]
+    private var isSleeping = false
 
     private var connectNotification: IOBluetoothUserNotification?
     private var disconnectNotificationsByAddress: [String: IOBluetoothUserNotification] = [:]
@@ -51,6 +52,27 @@ public final class BluetoothConnectionMonitor: NSObject, @unchecked Sendable {
             notification.unregister()
         }
         disconnectNotificationsByAddress.removeAll()
+    }
+
+    public func handleWillSleep() {
+        stateLock.withLock {
+            isSleeping = true
+            for key in lastKnownConnectedByAddress.keys {
+                transitionGenerationByAddress[key, default: 0] &+= 1
+            }
+        }
+    }
+
+    public func endSleepCycle() {
+        stateLock.withLock {
+            isSleeping = false
+        }
+    }
+
+    @MainActor
+    public func handleDidWake() {
+        endSleepCycle()
+        start()
     }
 
     public func resetState() {
@@ -130,6 +152,7 @@ public final class BluetoothConnectionMonitor: NSObject, @unchecked Sendable {
         guard !key.isEmpty else { return nil }
 
         return stateLock.withLock {
+            let isCurrentlySleeping = isSleeping
             let previous = lastKnownConnectedByAddress[key]
             lastKnownConnectedByAddress[key] = isConnected
 
@@ -140,7 +163,7 @@ public final class BluetoothConnectionMonitor: NSObject, @unchecked Sendable {
             let isAppTransitionActive = (activeAppTransitionCountByAddress[key] ?? 0) > 0
             let isWithinSuppressionWindow = (suppressionDeadlineByAddress[key].map { now < $0 }) ?? false
 
-            if isAppTransitionActive || isWithinSuppressionWindow {
+            if isCurrentlySleeping || isAppTransitionActive || isWithinSuppressionWindow {
                 return nil
             }
 
@@ -217,6 +240,8 @@ public final class BluetoothConnectionMonitor: NSObject, @unchecked Sendable {
     ) {
         if isConnected {
             registerDisconnectNotification(for: device, address: address)
+        } else {
+            unregisterDisconnectNotification(for: address)
         }
 
         let event = recordObservedState(
@@ -263,6 +288,14 @@ public final class BluetoothConnectionMonitor: NSObject, @unchecked Sendable {
         ) {
             disconnectNotificationsByAddress[key] = notification
         }
+    }
+
+    @MainActor
+    private func unregisterDisconnectNotification(for address: String) {
+        let key = address.normalizedBluetoothAddress
+        guard !key.isEmpty else { return }
+        disconnectNotificationsByAddress[key]?.unregister()
+        disconnectNotificationsByAddress.removeValue(forKey: key)
     }
 
     @MainActor

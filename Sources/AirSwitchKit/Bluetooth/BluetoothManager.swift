@@ -4,6 +4,11 @@ import Foundation
 public final class BluetoothManager {
     public static let shared = BluetoothManager()
 
+    public let operationQueue = DispatchQueue(
+        label: "io.github.airswitch.bluetooth-ops",
+        qos: .userInitiated
+    )
+
     private init() {}
 
     public func getPairedAudioDevices() -> [AudioDevice] {
@@ -48,16 +53,21 @@ public final class BluetoothManager {
     }
 
     public func findDevice(by addressOrName: String) -> IOBluetoothDevice? {
-        guard let devices = IOBluetoothDevice.pairedDevices() as? [IOBluetoothDevice] else {
-            return nil
-        }
         let cleanQuery = addressOrName.normalizedBluetoothAddress
+        let devices = (IOBluetoothDevice.pairedDevices() as? [IOBluetoothDevice]) ?? []
+
+        if let exactAddressMatch = devices.first(where: { ($0.addressString ?? "").matchesBluetoothAddress(cleanQuery) }) {
+            return exactAddressMatch
+        }
+
+        if cleanQuery.contains("-"),
+           let directDevice = IOBluetoothDevice(addressString: cleanQuery),
+           directDevice.isPaired() {
+            return directDevice
+        }
 
         return devices.first { device in
             let addr = device.addressString ?? ""
-            if addr.matchesBluetoothAddress(cleanQuery) {
-                return true
-            }
             let rawName = (device.nameOrAddress ?? "").lowercased()
             if rawName.contains(cleanQuery) {
                 return true
@@ -99,7 +109,16 @@ public final class BluetoothManager {
                 isConnected: device.isConnected()
             )
         }
-        return device.openConnection() == kIOReturnSuccess && device.isConnected()
+
+        if attemptConnect(device: device) {
+            return true
+        }
+
+        Thread.sleep(forTimeInterval: 0.3)
+        if device.isConnected() {
+            return true
+        }
+        return attemptConnect(device: device)
     }
 
     @discardableResult
@@ -115,7 +134,38 @@ public final class BluetoothManager {
                 isConnected: device.isConnected()
             )
         }
-        return device.closeConnection() == kIOReturnSuccess && !device.isConnected()
+
+        let status = device.closeConnection()
+        if !device.isConnected() {
+            return true
+        }
+        let timeout: TimeInterval = status == kIOReturnSuccess ? 1.5 : 0.5
+        return waitForConnectionState(of: device, targetConnected: false, timeout: timeout)
+    }
+
+    private func attemptConnect(device: IOBluetoothDevice) -> Bool {
+        let status = device.openConnection()
+        if device.isConnected() {
+            return true
+        }
+        let timeout: TimeInterval = status == kIOReturnSuccess ? 1.5 : 0.5
+        return waitForConnectionState(of: device, targetConnected: true, timeout: timeout)
+    }
+
+    private func waitForConnectionState(
+        of device: IOBluetoothDevice,
+        targetConnected: Bool,
+        timeout: TimeInterval,
+        pollInterval: TimeInterval = 0.1
+    ) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if device.isConnected() == targetConnected {
+                return true
+            }
+            Thread.sleep(forTimeInterval: pollInterval)
+        }
+        return device.isConnected() == targetConnected
     }
 
     public func toggle(device: IOBluetoothDevice) -> ToggleResult {
